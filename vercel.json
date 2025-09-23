@@ -1,24 +1,9 @@
 {
   "version": 2,
   "builds": [
-    {
-      "src": "index.js",
-      "use": "@vercel/node"
-    }
+    { "src": "index.js", "use": "@vercel/node" }
   ],
   "routes": [
-    {
-      "src": "/(.*)",
-      "dest": "index.js"
-    }
-  ],
-  "env": {
-    "CLIENT_API_KEY": "@client_api_key",
-    "GOOGLE_AI_API_KEY": "@google_ai_api_key"
-  },
-  "functions": {
-    "index.js": {
-      "maxDuration": 300
-    }
-  }
+    { "src": "/.*", "dest": "index.js" }
+  ]
 }

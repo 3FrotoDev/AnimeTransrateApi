@@ -9,7 +9,7 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY || "AIzaSyBU8JX-clwsmbBn6TlfexFFb0jFXQKljqg");
+const genAI = new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY);
 const app = express();
 const PORT = process.env.PORT || 3000;
 const CACHE_DIR = "./cache";
