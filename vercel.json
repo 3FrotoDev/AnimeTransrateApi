@@ -1,9 +1,30 @@
 {
   "version": 2,
   "builds": [
-    { "src": "index.js", "use": "@vercel/node" }
+    { "src": "api/*.js", "use": "@vercel/node" }
   ],
+  "functions": {
+    "api/proxy.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/translate.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "api/serve.js": {
+      "maxDuration": 30,
+      "memory": 512
+    },
+    "api/download.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  },
   "routes": [
-    { "src": "/.*", "dest": "index.js" }
+    { "src": "/api/translate", "dest": "/api/translate.js" },
+    { "src": "/api/serve", "dest": "/api/serve.js" },
+    { "src": "/api/download", "dest": "/api/download.js" }
   ]
 }
+  
