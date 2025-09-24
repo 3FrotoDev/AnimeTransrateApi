@@ -4,14 +4,19 @@ const fetch = require("node-fetch");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 require("dotenv").config();
 
-// Check if Google AI API key is configured
+// ✅ Check if Google AI API key is configured
 if (!process.env.GOOGLE_AI_API_KEY) {
   console.error("❌ GOOGLE_AI_API_KEY environment variable is not set!");
 }
 
-const genAI = process.env.GOOGLE_AI_API_KEY ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY) : null;
-const CACHE_DIR = "./cache";
+const genAI = process.env.GOOGLE_AI_API_KEY
+  ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+  : null;
 
+// ✅ Use ../cache (one level up from api folder)
+const CACHE_DIR = path.join(__dirname, "..", "cache");
+
+// ✅ Make sure the cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
@@ -43,9 +48,8 @@ function saveToCache(id, targetLang, content) {
 
 async function translateVTTWithProgress(url, targetLang = "ar", progressCallback) {
   try {
-    // Check if Google AI is properly configured
     if (!genAI) {
-      throw new Error("Google AI API key is not configured. Please set GOOGLE_AI_API_KEY environment variable.");
+      throw new Error("Google AI API key is not configured. Please set GOOGLE_AI_API_KEY.");
     }
 
     const id = extractIdFromUrl(url);
@@ -92,7 +96,6 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
       const text = chunk.text();
       if (text) {
         collected += text;
-
         lastProgress = Math.min(90, lastProgress + 2);
         progressCallback("translating", lastProgress, "Receiving translation...");
       }
@@ -111,13 +114,12 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 }
 
 module.exports = async (req, res) => {
-  // API key authentication
   const clientKey = req.headers["x-api-key"];
 
   if (!process.env.CLIENT_API_KEY) {
     return res.status(500).json({ error: "Server configuration error" });
   }
-  
+
   if (clientKey !== process.env.CLIENT_API_KEY || !clientKey) {
     return res.status(403).json({ error: "Forbidden", status: 403 });
   }
@@ -170,7 +172,7 @@ module.exports = async (req, res) => {
         success: true,
         status: 200,
         message: "Translation completed successfully!",
-        foundCached: typeof cachedFile !== "null",
+        foundCached: !!cachedFile,
         downloadUrl,
         id,
         language: targetLang,
@@ -182,6 +184,7 @@ module.exports = async (req, res) => {
     } catch (error) {
       const errorResult = {
         type: "error",
+        status: 500,
         success: false,
         error: "Translation failed",
         message: error.message,

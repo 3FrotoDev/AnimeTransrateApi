@@ -1,8 +1,7 @@
 const fs = require("fs");
 const path = require("path");
-
 const CACHE_DIR = "./cache";
-const BUFFER_SIZE = 128 * 1024; // 128KB buffer for maximum speed
+const BUFFER_SIZE = 128 * 1024; 
 
 module.exports = (req, res) => {
   if (req.method !== "GET") {
@@ -25,11 +24,9 @@ module.exports = (req, res) => {
       return res.status(404).json({ error: "File not found" });
     }
 
-    // Get file stats
     const stats = fs.statSync(filepath);
     const fileSize = stats.size;
 
-    // Set headers for fast download
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
     res.setHeader("Content-Length", fileSize);
@@ -38,13 +35,11 @@ module.exports = (req, res) => {
     res.setHeader("Expires", "0");
     res.setHeader("Accept-Ranges", "bytes");
 
-    // Use high-performance buffer streaming
     const fileStream = fs.createReadStream(filepath, { 
       highWaterMark: BUFFER_SIZE,
       autoClose: true 
     });
 
-    // Handle stream errors
     fileStream.on('error', (error) => {
       console.error('Stream error:', error);
       if (!res.headersSent) {
@@ -52,7 +47,6 @@ module.exports = (req, res) => {
       }
     });
 
-    // Pipe with high performance
     fileStream.pipe(res, { end: true });
 
   } catch (error) {
