@@ -164,7 +164,10 @@ module.exports = async (req, res) => {
     try {
       const filePath = await translateVTTWithProgress(url, targetLang, progressCallback);
       const id = extractIdFromUrl(url);
-      const downloadUrl = `${req.protocol}://${req.get("host")}/api/download/${id}/${targetLang}`;
+      const protocol = req.headers["x-forwarded-proto"] || "https";
+      const host = req.headers["x-forwarded-host"] || req.headers.host;
+      const downloadUrl = `${protocol}://${host}/api/download/${id}/${targetLang}`;
+
       const cachedFile = getCachedFile(id, targetLang);
 
       const finalResult = {
