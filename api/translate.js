@@ -89,7 +89,7 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     progressCallback("processing", 30, "File downloaded, preparing for translation...");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
 
     const prompt = `
     You are a professional subtitle translator.
