@@ -18,6 +18,10 @@
     { "src": "/api/translate", "dest": "/api/translate.js" },
     { "src": "/api/serve", "dest": "/api/serve.js" },
     { "src": "/api/download", "dest": "/api/download.js" }
-  ]
+  ],
+  "env": {
+    "KV_REST_API_URL": "@kv_rest_api_url",
+    "KV_REST_API_TOKEN": "@kv_rest_api_token"
+  }
 }
   

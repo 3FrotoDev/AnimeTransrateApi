@@ -1,9 +1,10 @@
 const fs = require("fs");
 const path = require("path");
+const { kv } = require("@vercel/kv");
 const CACHE_DIR = "./cache";
 const BUFFER_SIZE = 128 * 1024; 
 
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -20,12 +21,20 @@ module.exports = (req, res) => {
     const filename = `${id}_${lang}.vtt`;
     const filepath = path.join(CACHE_DIR, filename);
 
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ error: "File not found" });
+    let content = null;
+    try {
+      content = await kv.get(`vtt:${id}:${lang}`);
+    } catch (e) {
+      // fallback below
+    }
+    if (typeof content !== "string") {
+      if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      content = fs.readFileSync(filepath, "utf-8");
     }
 
-    const stats = fs.statSync(filepath);
-    const fileSize = stats.size;
+    const fileSize = Buffer.byteLength(content, "utf8");
 
     res.setHeader("Content-Type", "application/octet-stream");
     res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
@@ -35,19 +44,8 @@ module.exports = (req, res) => {
     res.setHeader("Expires", "0");
     res.setHeader("Accept-Ranges", "bytes");
 
-    const fileStream = fs.createReadStream(filepath, { 
-      highWaterMark: BUFFER_SIZE,
-      autoClose: true 
-    });
-
-    fileStream.on('error', (error) => {
-      console.error('Stream error:', error);
-      if (!res.headersSent) {
-        res.status(500).json({ error: "Stream error", message: error.message });
-      }
-    });
-
-    fileStream.pipe(res, { end: true });
+    res.statusCode = 200;
+    res.end(content, "utf8");
 
   } catch (error) {
     res.status(500).json({ error: "Failed to download file", message: error.message });

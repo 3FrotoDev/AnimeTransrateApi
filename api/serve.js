@@ -1,10 +1,8 @@
 const fs = require("fs");
 const path = require("path");
+const { kv } = require("@vercel/kv");
 
-const CACHE_DIR = "./cache";
-const BUFFER_SIZE = 64 * 1024; 
-
-module.exports = (req, res) => {
+module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
   }
@@ -21,12 +19,21 @@ module.exports = (req, res) => {
     const filename = `${id}_${lang}.vtt`;
     const filepath = path.join(CACHE_DIR, filename);
 
-    if (!fs.existsSync(filepath)) {
-      return res.status(404).json({ error: "File not found" });
+    let content = null;
+    try {
+      content = await kv.get(`vtt:${id}:${lang}`);
+    } catch (e) {
+
     }
 
-    const stats = fs.statSync(filepath);
-    const fileSize = stats.size;
+    if (typeof content !== "string") {
+      if (!fs.existsSync(filepath)) {
+        return res.status(404).json({ error: "File not found" });
+      }
+      content = fs.readFileSync(filepath, "utf-8");
+    }
+
+    const fileSize = Buffer.byteLength(content, "utf8");
 
     res.setHeader("Content-Type", "text/vtt; charset=utf-8");
     res.setHeader("Content-Disposition", `inline; filename="${filename}"`);
@@ -35,23 +42,9 @@ module.exports = (req, res) => {
     res.setHeader("ETag", `"${id}-${lang}"`);
     res.setHeader("Accept-Ranges", "bytes");
 
-    const range = req.headers.range;
-    if (range) {
-      const parts = range.replace(/bytes=/, "").split("-");
-      const start = parseInt(parts[0], 10);
-      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
-      const chunksize = (end - start) + 1;
-      
-      res.status(206);
-      res.setHeader("Content-Range", `bytes ${start}-${end}/${fileSize}`);
-      res.setHeader("Content-Length", chunksize);
-      
-      const fileStream = fs.createReadStream(filepath, { start, end, highWaterMark: BUFFER_SIZE });
-      fileStream.pipe(res);
-    } else {
-      const fileStream = fs.createReadStream(filepath, { highWaterMark: BUFFER_SIZE });
-      fileStream.pipe(res);
-    }
+    // Stream from memory buffer for simplicity; VTT files are typically small
+    res.statusCode = 200;
+    res.end(content, "utf8");
   } catch (error) {
     res.status(500).json({ error: "Failed to serve file", message: error.message });
   }

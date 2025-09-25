@@ -2,9 +2,9 @@ const fs = require("fs");
 const path = require("path");
 const fetch = require("node-fetch");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { kv } = require("@vercel/kv");
 require("dotenv").config();
 
-// ✅ Check if Google AI API key is configured
 if (!process.env.GOOGLE_AI_API_KEY) {
   console.error("❌ GOOGLE_AI_API_KEY environment variable is not set!");
 }
@@ -13,10 +13,7 @@ const genAI = process.env.GOOGLE_AI_API_KEY
   ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
   : null;
 
-// ✅ Use ../cache (one level up from api folder)
 const CACHE_DIR = path.join(__dirname, "..", "cache");
-
-// ✅ Make sure the cache directory exists
 if (!fs.existsSync(CACHE_DIR)) {
   fs.mkdirSync(CACHE_DIR, { recursive: true });
 }
@@ -26,24 +23,40 @@ function extractIdFromUrl(url) {
   return match ? match[1] : null;
 }
 
-function getCachedFile(id, targetLang) {
+async function getCachedContent(id, targetLang) {
+  const key = `vtt:${id}:${targetLang}`;
+  try {
+    const cached = await kv.get(key);
+    if (cached) {
+      console.log(`📁 Found KV cached item: ${key}`);
+      return typeof cached === "string" ? cached : String(cached);
+    }
+  } catch (e) {
+    console.warn("KV get failed, falling back to local cache if exists:", e.message);
+  }
+
   const filename = `${id}_${targetLang}.vtt`;
   const filepath = path.join(CACHE_DIR, filename);
-
   if (fs.existsSync(filepath)) {
-    console.log(`📁 Found cached file: ${filename}`);
-    return filepath;
+    return fs.readFileSync(filepath, "utf-8");
   }
   return null;
 }
 
-function saveToCache(id, targetLang, content) {
-  const filename = `${id}_${targetLang}.vtt`;
-  const filepath = path.join(CACHE_DIR, filename);
-
-  fs.writeFileSync(filepath, content, "utf-8");
-  console.log(`💾 Saved to cache: ${filename}`);
-  return filepath;
+async function saveToCache(id, targetLang, content) {
+  const key = `vtt:${id}:${targetLang}`;
+  try {
+    await kv.set(key, content, { ex: 60 * 60 * 24 * 7 });
+    console.log(`💾 Saved to KV: ${key}`);
+    return true;
+  } catch (e) {
+    console.warn("KV set failed, saving to local fallback cache:", e.message);
+    const filename = `${id}_${targetLang}.vtt`;
+    const filepath = path.join(CACHE_DIR, filename);
+    fs.writeFileSync(filepath, content, "utf-8");
+    console.log(`💾 Saved to local cache: ${filename}`);
+    return true;
+  }
 }
 
 async function translateVTTWithProgress(url, targetLang = "ar", progressCallback) {
@@ -57,10 +70,10 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     progressCallback("initializing", 5, "Starting translation process...");
 
-    const cachedFile = getCachedFile(id, targetLang);
-    if (cachedFile) {
-      progressCallback("completed", 100, "Using cached translation");
-      return cachedFile;
+    const cachedContent = await getCachedContent(id, targetLang);
+    if (cachedContent) {
+      progressCallback("completed", 100, "Using cached translation (KV)");
+      return "cached";
     }
 
     progressCallback("downloading", 15, "Downloading VTT file...");
@@ -103,10 +116,10 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     progressCallback("saving", 95, "Saving translated file...");
 
-    const savedPath = saveToCache(id, targetLang, collected);
+    await saveToCache(id, targetLang, collected);
 
     progressCallback("completed", 100, "Translation completed successfully!");
-    return savedPath;
+    return "saved";
   } catch (err) {
     progressCallback("error", 0, `Error: ${err.message}`);
     throw err;
@@ -162,20 +175,19 @@ module.exports = async (req, res) => {
     };
 
     try {
-      const filePath = await translateVTTWithProgress(url, targetLang, progressCallback);
+      const result = await translateVTTWithProgress(url, targetLang, progressCallback);
       const id = extractIdFromUrl(url);
       const protocol = req.headers["x-forwarded-proto"] || "https";
       const host = req.headers["x-forwarded-host"] || req.headers.host;
       const downloadUrl = `${protocol}://${host}/api/download/${id}/${targetLang}`;
-
-      const cachedFile = getCachedFile(id, targetLang);
+      const cachedNow = await getCachedContent(id, targetLang);
 
       const finalResult = {
         type: "completed",
         success: true,
         status: 200,
         message: "Translation completed successfully!",
-        foundCached: !!cachedFile,
+        foundCached: !!cachedNow,
         downloadUrl,
         id,
         language: targetLang,
