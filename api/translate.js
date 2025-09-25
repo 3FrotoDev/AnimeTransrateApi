@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
@@ -7,8 +7,11 @@ if (!process.env.GOOGLE_AI_API_KEY) {
   console.error("❌ GOOGLE_AI_API_KEY environment variable is not set!");
 }
 
-const genAI = process.env.GOOGLE_AI_API_KEY
-  ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+const ai = process.env.GOOGLE_AI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: process.env.GOOGLE_AI_API_KEY,
+      httpOptions: { apiVersion: "v1alpha" },
+    })
   : null;
 
 
@@ -66,7 +69,7 @@ async function saveToCache(id, targetLang, content) {
 
 async function translateVTTWithProgress(url, targetLang = "ar", progressCallback) {
   try {
-    if (!genAI) {
+    if (!ai) {
       throw new Error("Google AI API key is not configured. Please set GOOGLE_AI_API_KEY.");
     }
 
@@ -89,8 +92,6 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     progressCallback("processing", 30, "File downloaded, preparing for translation...");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-001" });
-
     const prompt = `
     You are a professional subtitle translator.
     Translate the following WebVTT subtitle file into ${targetLang}.
@@ -103,25 +104,24 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
     ${vttText}
     `;
 
-    progressCallback("translating", 40, "Translating content using AI (streaming)...");
+    progressCallback("translating", 40, "Translating content using AI...");
 
-    const stream = await model.generateContentStream(prompt);
-
-    let collected = "";
-    let lastProgress = 40;
-
-    for await (const chunk of stream.stream) {
-      const text = chunk.text();
-      if (text) {
-        collected += text;
-        lastProgress = Math.min(90, lastProgress + 2);
-        progressCallback("translating", lastProgress, "Receiving translation...");
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-flash",
+      contents: prompt,
+      generationConfig: {
+        temperature: 0.1,
+        topK: 1,
+        topP: 1,
+        maxOutputTokens: 8192,
       }
-    }
+    });
+
+    const translatedText = response.text;
 
     progressCallback("saving", 95, "Saving translated file...");
 
-    await saveToCache(id, targetLang, collected);
+    await saveToCache(id, targetLang, translatedText);
 
     progressCallback("completed", 100, "Translation completed successfully!");
     return "saved";
