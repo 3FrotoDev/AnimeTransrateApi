@@ -1,8 +1,6 @@
-const fs = require("fs");
-const path = require("path");
 const fetch = require("node-fetch");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
-const { kv } = require("@vercel/kv");
+const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
 if (!process.env.GOOGLE_AI_API_KEY) {
@@ -13,50 +11,57 @@ const genAI = process.env.GOOGLE_AI_API_KEY
   ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
   : null;
 
-const CACHE_DIR = path.join(__dirname, "..", "cache");
-if (!fs.existsSync(CACHE_DIR)) {
-  fs.mkdirSync(CACHE_DIR, { recursive: true });
-}
 
 function extractIdFromUrl(url) {
   const match = url.match(/\/subtitle\/([^\/]+)\//);
   return match ? match[1] : null;
 }
 
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+
+const SUPABASE_BUCKET = process.env.SUPABASE_BUCKET || "subtitles";
+
 async function getCachedContent(id, targetLang) {
   const key = `vtt:${id}:${targetLang}`;
-  try {
-    const cached = await kv.get(key);
-    if (cached) {
-      console.log(`📁 Found KV cached item: ${key}`);
-      return typeof cached === "string" ? cached : String(cached);
+  if (supabase) {
+    try {
+      const filePath = `${id}/${targetLang}.vtt`;
+      const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).download(filePath);
+      if (!error && data) {
+        const text = await data.text();
+        console.log(`📁 Found Supabase Storage item: ${filePath}`);
+        return text;
+      }
+    } catch (e) {
+      console.warn("Supabase download failed:", e.message);
     }
-  } catch (e) {
-    console.warn("KV get failed, falling back to local cache if exists:", e.message);
-  }
-
-  const filename = `${id}_${targetLang}.vtt`;
-  const filepath = path.join(CACHE_DIR, filename);
-  if (fs.existsSync(filepath)) {
-    return fs.readFileSync(filepath, "utf-8");
   }
   return null;
 }
 
 async function saveToCache(id, targetLang, content) {
-  const key = `vtt:${id}:${targetLang}`;
-  try {
-    await kv.set(key, content, { ex: 60 * 60 * 24 * 7 });
-    console.log(`💾 Saved to KV: ${key}`);
-    return true;
-  } catch (e) {
-    console.warn("KV set failed, saving to local fallback cache:", e.message);
-    const filename = `${id}_${targetLang}.vtt`;
-    const filepath = path.join(CACHE_DIR, filename);
-    fs.writeFileSync(filepath, content, "utf-8");
-    console.log(`💾 Saved to local cache: ${filename}`);
-    return true;
+  if (supabase) {
+    try {
+      const filePath = `${id}/${targetLang}.vtt`;
+      const blob = new Blob([content], { type: "text/vtt" });
+      const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(filePath, blob, {
+        cacheControl: "604800",
+        upsert: true,
+        contentType: "text/vtt; charset=utf-8"
+      });
+      if (!error) {
+        console.log(`💾 Saved to Supabase Storage: ${filePath}`);
+        return true;
+      } else {
+        console.warn("Supabase upload error:", error.message);
+      }
+    } catch (e) {
+      console.warn("Supabase upload failed:", e.message);
+    }
   }
+  throw new Error("Supabase not configured or upload failed");
 }
 
 async function translateVTTWithProgress(url, targetLang = "ar", progressCallback) {
@@ -72,7 +77,7 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     const cachedContent = await getCachedContent(id, targetLang);
     if (cachedContent) {
-      progressCallback("completed", 100, "Using cached translation (KV)");
+      progressCallback("completed", 100, "Using cached translation (cache)");
       return "cached";
     }
 
@@ -132,7 +137,7 @@ module.exports = async (req, res) => {
   if (!process.env.CLIENT_API_KEY) {
     return res.status(500).json({ error: "Server configuration error" });
   }
-
+  
   if (clientKey !== process.env.CLIENT_API_KEY || !clientKey) {
     return res.status(403).json({ error: "Forbidden", status: 403 });
   }

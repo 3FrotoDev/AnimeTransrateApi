@@ -1,7 +1,4 @@
-const fs = require("fs");
-const path = require("path");
-const { kv } = require("@vercel/kv");
-const CACHE_DIR = "./cache";
+const { createClient } = require("@supabase/supabase-js");
 const BUFFER_SIZE = 128 * 1024; 
 
 module.exports = async (req, res) => {
@@ -19,19 +16,26 @@ module.exports = async (req, res) => {
     }
 
     const filename = `${id}_${lang}.vtt`;
-    const filepath = path.join(CACHE_DIR, filename);
 
     let content = null;
+    // Fetch exclusively from Supabase Storage
     try {
-      content = await kv.get(`vtt:${id}:${lang}`);
-    } catch (e) {
-      // fallback below
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const supabaseKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
+      const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+      const bucket = process.env.SUPABASE_BUCKET || "subtitles";
+      if (supabase) {
+        const filePath = `${id}/${lang}.vtt`;
+        const { data, error } = await supabase.storage.from(bucket).download(filePath);
+        if (!error && data) {
+          content = await data.text();
+        }
+      }
+    } catch (_) {
+      // ignore
     }
     if (typeof content !== "string") {
-      if (!fs.existsSync(filepath)) {
-        return res.status(404).json({ error: "File not found" });
-      }
-      content = fs.readFileSync(filepath, "utf-8");
+      return res.status(404).json({ error: "File not found" });
     }
 
     const fileSize = Buffer.byteLength(content, "utf8");
