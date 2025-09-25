@@ -18,12 +18,6 @@
     { "src": "/api/translate", "dest": "/api/translate.js" },
     { "src": "/api/serve", "dest": "/api/serve.js" },
     { "src": "/api/download", "dest": "/api/download.js" }
-  ],
-  "env": {
-    "SUPABASE_URL": "@supabase_url",
-    "SUPABASE_ANON_KEY": "@supabase_anon_key",
-    "SUPABASE_SERVICE_ROLE": "@supabase_service_role",
-    "SUPABASE_BUCKET": "@supabase_bucket"
-  }
+  ]
 }
   
