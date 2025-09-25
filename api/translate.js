@@ -17,7 +17,7 @@ function extractIdFromUrl(url) {
   return match ? match[1] : null;
 }
 
-const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseUrl = "https://rtbmnumryqmhlcepttfh.supabase.co";
 const supabaseKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
 const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
@@ -137,7 +137,7 @@ module.exports = async (req, res) => {
   if (!process.env.CLIENT_API_KEY) {
     return res.status(500).json({ error: "Server configuration error" });
   }
-  
+
   if (clientKey !== process.env.CLIENT_API_KEY || !clientKey) {
     return res.status(403).json({ error: "Forbidden", status: 403 });
   }

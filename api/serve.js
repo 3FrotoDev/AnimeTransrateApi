@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
   let content = null;
   // Fetch exclusively from Supabase Storage
   try {
-    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseUrl = "https://rtbmnumryqmhlcepttfh.supabase.co";
     const supabaseKey = process.env.SUPABASE_SERVICE_ROLE || process.env.SUPABASE_ANON_KEY;
     const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
     const bucket = process.env.SUPABASE_BUCKET || "subtitles";
