@@ -181,7 +181,6 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     progressCallback("processing", 30, "File downloaded, preparing for translation...");
 
-<<<<<<< HEAD
     // Split large VTT files into chunks for better translation
     const chunks = splitVTTIntoChunks(vttText, 3000); // Split into chunks of ~3000 characters
     let translatedText = "WEBVTT\n\n";
@@ -214,34 +213,8 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
       // Add a small delay between chunks to avoid rate limiting
       if (i < chunks.length - 1) {
         await new Promise(resolve => setTimeout(resolve, 1000));
-=======
-    const prompt = `
-    You are a professional subtitle translator.
-    Translate the following WebVTT subtitle file into ${targetLang}.
-    - Keep the VTT format (timestamps, numbering, etc).
-    - Only translate the dialogue text.
-    - Do not remove or change timing codes.
-    - Do not add explanations, just return the translated VTT.
-
-    Here is the file:
-    ${vttText}
-    `;
-
-    progressCallback("translating", 40, "Translating content using AI...");
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-flash",
-      contents: prompt,
-      generationConfig: {
-        temperature: 0.1,
-        topK: 1,
-        topP: 1,
-        maxOutputTokens: 8192,
->>>>>>> 7761e0343c792a065b5839b9739dbaecddbbc62d
       }
-    });
-
-    const translatedText = response.text;
+    }
 
     // Clean up the final text
     translatedText = translatedText.replace(/\n\n\n+/g, '\n\n').trim();
