@@ -1,5 +1,5 @@
 const fetch = require("node-fetch");
-const { GoogleGenerativeAI } = require("@google/generative-ai");
+const { GoogleGenAI } = require("@google/genai");
 const { createClient } = require("@supabase/supabase-js");
 require("dotenv").config();
 
@@ -7,14 +7,104 @@ if (!process.env.GOOGLE_AI_API_KEY) {
   console.error("❌ GOOGLE_AI_API_KEY environment variable is not set!");
 }
 
-const genAI = process.env.GOOGLE_AI_API_KEY
-  ? new GoogleGenerativeAI(process.env.GOOGLE_AI_API_KEY)
+const ai = process.env.GOOGLE_AI_API_KEY
+  ? new GoogleGenAI({
+      apiKey: process.env.GOOGLE_AI_API_KEY,
+      httpOptions: { apiVersion: "v1alpha" },
+    })
   : null;
 
 
 function extractIdFromUrl(url) {
   const match = url.match(/\/subtitle\/([^\/]+)\//);
   return match ? match[1] : null;
+}
+
+function generateThanksMessage() {
+  // Create a timestamp that appears at the end of the video
+  // This will show for 5 seconds at the end
+  const startTime = "99:59:55.000";
+  const endTime = "99:59:59.999";
+  
+  return `${startTime} --> ${endTime}
+Thanks for watching nuvex team`;
+}
+
+function splitVTTIntoChunks(vttText, maxChunkSize) {
+  const lines = vttText.split('\n');
+  const chunks = [];
+  let currentChunk = '';
+  
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const testChunk = currentChunk + line + '\n';
+    
+    // If adding this line would exceed the chunk size, save current chunk
+    if (testChunk.length > maxChunkSize && currentChunk.trim()) {
+      // Try to find a good break point (empty line or timestamp)
+      const lastEmptyLine = currentChunk.lastIndexOf('\n\n');
+      if (lastEmptyLine > 0) {
+        // Split at the last empty line
+        const goodChunk = currentChunk.substring(0, lastEmptyLine).trim();
+        const remaining = currentChunk.substring(lastEmptyLine).trim();
+        chunks.push(goodChunk);
+        currentChunk = remaining + '\n' + line + '\n';
+      } else {
+        chunks.push(currentChunk.trim());
+        currentChunk = line + '\n';
+      }
+    } else {
+      currentChunk = testChunk;
+    }
+  }
+  
+  // Add the last chunk if it has content
+  if (currentChunk.trim()) {
+    chunks.push(currentChunk.trim());
+  }
+  
+  return chunks;
+}
+
+async function translateChunkWithRetry(ai, chunk, targetLang, maxRetries = 3) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      const prompt = `
+      You are a professional subtitle translator.
+      Translate the following WebVTT subtitle chunk into ${targetLang}.
+      - Keep the VTT format (timestamps, numbering, etc).
+      - Only translate the dialogue text.
+      - Do not remove or change timing codes.
+      - Do not add explanations, just return the translated VTT chunk.
+      - Do not include WEBVTT header in your response.
+
+      Here is the chunk:
+      ${chunk}
+      `;
+
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash",
+        contents: prompt,
+        generationConfig: {
+          temperature: 0.1,
+          topK: 1,
+          topP: 1,
+          maxOutputTokens: 4096,
+        }
+      });
+
+      return response.text.trim();
+    } catch (error) {
+      console.warn(`Attempt ${attempt} failed for chunk:`, error.message);
+      
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      
+      // Wait before retry (exponential backoff)
+      await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+    }
+  }
 }
 
 const supabaseUrl = "https://rtbmnumryqmhlcepttfh.supabase.co";
@@ -30,9 +120,11 @@ async function getCachedContent(id, targetLang) {
       const filePath = `${id}/${targetLang}.vtt`;
       const { data, error } = await supabase.storage.from(SUPABASE_BUCKET).download(filePath);
       if (!error && data) {
-        const text = await data.text();
+        const arrayBuffer = await data.arrayBuffer();
+        const text = Buffer.from(arrayBuffer).toString("utf8");
+        const cleanText = text.replace(/^\uFEFF/, "");
         console.log(`📁 Found Supabase Storage item: ${filePath}`);
-        return text;
+        return cleanText;
       }
     } catch (e) {
       console.warn("Supabase download failed:", e.message);
@@ -45,8 +137,8 @@ async function saveToCache(id, targetLang, content) {
   if (supabase) {
     try {
       const filePath = `${id}/${targetLang}.vtt`;
-      const blob = new Blob([content], { type: "text/vtt" });
-      const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(filePath, blob, {
+      const buffer = Buffer.from(content, "utf8");
+      const { error } = await supabase.storage.from(SUPABASE_BUCKET).upload(filePath, buffer, {
         cacheControl: "604800",
         upsert: true,
         contentType: "text/vtt; charset=utf-8"
@@ -66,7 +158,7 @@ async function saveToCache(id, targetLang, content) {
 
 async function translateVTTWithProgress(url, targetLang = "ar", progressCallback) {
   try {
-    if (!genAI) {
+    if (!ai) {
       throw new Error("Google AI API key is not configured. Please set GOOGLE_AI_API_KEY.");
     }
 
@@ -89,39 +181,51 @@ async function translateVTTWithProgress(url, targetLang = "ar", progressCallback
 
     progressCallback("processing", 30, "File downloaded, preparing for translation...");
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Split large VTT files into chunks for better translation
+    const chunks = splitVTTIntoChunks(vttText, 3000); // Split into chunks of ~3000 characters
+    let translatedText = "WEBVTT\n\n";
+    
+    progressCallback("translating", 40, `Translating content using AI (${chunks.length} chunks)...`);
 
-    const prompt = `
-    You are a professional subtitle translator.
-    Translate the following WebVTT subtitle file into ${targetLang}.
-    - Keep the VTT format (timestamps, numbering, etc).
-    - Only translate the dialogue text.
-    - Do not remove or change timing codes.
-    - Do not add explanations, just return the translated VTT.
+    for (let i = 0; i < chunks.length; i++) {
+      const chunk = chunks[i];
+      const progress = 40 + Math.floor((i / chunks.length) * 50);
+      
+      progressCallback("translating", progress, `Translating chunk ${i + 1}/${chunks.length}...`);
 
-    Here is the file:
-    ${vttText}
-    `;
-
-    progressCallback("translating", 40, "Translating content using AI (streaming)...");
-
-    const stream = await model.generateContentStream(prompt);
-
-    let collected = "";
-    let lastProgress = 40;
-
-    for await (const chunk of stream.stream) {
-      const text = chunk.text();
-      if (text) {
-        collected += text;
-        lastProgress = Math.min(90, lastProgress + 2);
-        progressCallback("translating", lastProgress, "Receiving translation...");
+      try {
+        const chunkTranslation = await translateChunkWithRetry(ai, chunk, targetLang);
+        
+        if (chunkTranslation) {
+          translatedText += chunkTranslation + "\n\n";
+          console.log(`✅ Successfully translated chunk ${i + 1}/${chunks.length}`);
+        } else {
+          console.warn(`⚠️ Empty translation for chunk ${i + 1}`);
+        }
+      } catch (error) {
+        console.error(`❌ Failed to translate chunk ${i + 1} after all retries:`, error.message);
+        
+        // Add the original chunk as fallback
+        translatedText += chunk + "\n\n";
+        console.log(`📝 Added original chunk ${i + 1} as fallback`);
+      }
+      
+      // Add a small delay between chunks to avoid rate limiting
+      if (i < chunks.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
 
+    // Clean up the final text
+    translatedText = translatedText.replace(/\n\n\n+/g, '\n\n').trim();
+    
+    // Add thanks message at the end
+    const thanksMessage = generateThanksMessage();
+    translatedText += "\n\n" + thanksMessage;
+    
     progressCallback("saving", 95, "Saving translated file...");
 
-    await saveToCache(id, targetLang, collected);
+    await saveToCache(id, targetLang, translatedText);
 
     progressCallback("completed", 100, "Translation completed successfully!");
     return "saved";
