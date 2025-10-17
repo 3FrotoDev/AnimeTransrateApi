@@ -76,6 +76,7 @@ module.exports = async (req, res) => {
     const kebabName = toKebabCase(animeName);
     const hiAnimeSlug = await getHiAnimeSlug(animeName);
 
+    
     return res.status(200).json({
       ok: true,
       anilistId,
