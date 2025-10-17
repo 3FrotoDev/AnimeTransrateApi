@@ -9,14 +9,23 @@ function toKebabCase(str) {
     .replace(/^-+|-+$/g, "");
 }
 
-async function getAnimeNameFromAniList(animeId) {
+async function getAnimeInfoFromAniList(animeId) {
   const query = `
     query ($id: Int) {
       Media(id: $id, type: ANIME) {
-        title {
-          romaji
-          english
-        }
+        id
+        siteUrl
+        title { romaji english native userPreferred }
+        format
+        status
+        episodes
+        season
+        seasonYear
+        averageScore
+        genres
+        bannerImage
+        coverImage { medium large extraLarge color }
+        description(asHtml: false)
       }
     }
   `;
@@ -25,9 +34,24 @@ async function getAnimeNameFromAniList(animeId) {
     variables: { id: animeId },
   });
 
-  const title =
-    data?.data?.Media?.title?.romaji || data?.data?.Media?.title?.english;
-  return title || null;
+  const media = data?.data?.Media;
+  if (!media) return null;
+
+  return {
+    id: media.id,
+    siteUrl: media.siteUrl,
+    title: media.title,
+    format: media.format,
+    status: media.status,
+    episodes: media.episodes,
+    season: media.season,
+    seasonYear: media.seasonYear,
+    averageScore: media.averageScore,
+    genres: media.genres,
+    bannerImage: media.bannerImage,
+    coverImage: media.coverImage,
+    description: media.description
+  };
 }
 
 async function getHiAnimeSlug(animeName) {
@@ -60,29 +84,69 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const idParam = req.query?.id || req.query?.anilistId;
-    const anilistId = parseInt(idParam, 10);
+    const idsParam = req.query?.ids;
+    const singleIdParam = req.query?.id || req.query?.anilistId;
+
+    if (!idsParam && !singleIdParam) {
+      return res
+        .status(400)
+        .json({ error: "Provide 'id' or 'ids' (comma-separated AniList IDs)" });
+    }
+
+    if (idsParam) {
+      const ids = String(idsParam)
+        .split(',')
+        .map(s => parseInt(s.trim(), 10))
+        .filter(n => Number.isInteger(n) && n > 0);
+
+      if (!ids.length) {
+        return res.status(400).json({ error: "No valid IDs provided" });
+      }
+
+      const results = await Promise.all(ids.map(async (anilistId) => {
+        const info = await getAnimeInfoFromAniList(anilistId);
+        if (!info) {
+          return { anilistId, error: "Not found" };
+        }
+        const animeName = info.title?.romaji || info.title?.english || info.title?.userPreferred;
+        const kebabName = animeName ? toKebabCase(animeName) : null;
+        const hiAnimeSlug = animeName ? await getHiAnimeSlug(animeName) : null;
+        return {
+          anilistId,
+          animeName,
+          kebabName,
+          hiAnimeSlug,
+          animeInfo: info
+        };
+      }));
+
+      return res.status(200).json({ ok: true, results });
+    }
+
+    // Single ID path
+    const anilistId = parseInt(singleIdParam, 10);
     if (!anilistId || Number.isNaN(anilistId)) {
       return res
         .status(400)
-        .json({ error: "Query param 'id' (AniList ID) is required" });
+        .json({ error: "Query param 'id' (AniList ID) is invalid" });
     }
 
-    const animeName = await getAnimeNameFromAniList(anilistId);
-    if (!animeName) {
+    const info = await getAnimeInfoFromAniList(anilistId);
+    if (!info) {
       return res.status(404).json({ error: "Anime not found on AniList" });
     }
 
-    const kebabName = toKebabCase(animeName);
-    const hiAnimeSlug = await getHiAnimeSlug(animeName);
+    const animeName = info.title?.romaji || info.title?.english || info.title?.userPreferred;
+    const kebabName = animeName ? toKebabCase(animeName) : null;
+    const hiAnimeSlug = animeName ? await getHiAnimeSlug(animeName) : null;
 
-    
     return res.status(200).json({
       ok: true,
       anilistId,
       animeName,
       kebabName,
       hiAnimeSlug,
+      animeInfo: info
     });
   } catch (error) {
     return res
