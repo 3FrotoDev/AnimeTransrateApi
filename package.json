@@ -15,10 +15,7 @@
     "@google/generative-ai": "^0.2.1",
     "@supabase/supabase-js": "^2.45.4",
     "axios": "^1.11.0",
-<<<<<<< HEAD
     "cheerio": "^1.1.2",
-=======
->>>>>>> origin/main
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^5.1.0",
