@@ -1,0 +1,28 @@
+{
+  "version": 2,
+  "functions": {
+    "api/translate.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "api/serve.js": {
+      "maxDuration": 30,
+      "memory": 512
+    },
+    "api/download.js": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/anilist-to-hianimez.js": {
+      "maxDuration": 30,
+      "memory": 512
+    }
+  },
+  "routes": [
+    { "src": "/api/translate", "dest": "/api/translate.js" },
+    { "src": "/api/serve(?:/.*)?", "dest": "/api/serve.js" },
+    { "src": "/api/download(?:/.*)?", "dest": "/api/download.js" },
+    { "src": "/api/anilist-to-hianimez(?:/.*)?", "dest": "/api/anilist-to-hianimez.js" }
+  ]
+}
+  
