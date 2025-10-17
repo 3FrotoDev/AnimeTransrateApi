@@ -25,14 +25,19 @@ async function getAnimeNameFromAniList(animeId) {
     variables: { id: animeId },
   });
 
-  const title = data?.data?.Media?.title?.romaji || data?.data?.Media?.title?.english;
+  const title =
+    data?.data?.Media?.title?.romaji || data?.data?.Media?.title?.english;
   return title || null;
 }
 
 async function getHiAnimeSlug(animeName) {
   try {
-    const searchUrl = `https://hianime.to/search?keyword=${encodeURIComponent(animeName)}`;
-    const { data } = await axios.get(searchUrl, { headers: { "User-Agent": "Mozilla/5.0" } });
+    const searchUrl = `https://hianime.to/search?keyword=${encodeURIComponent(
+      animeName
+    )}`;
+    const { data } = await axios.get(searchUrl, {
+      headers: { "User-Agent": "Mozilla/5.0" },
+    });
     const $ = cheerio.load(data);
 
     const firstLink = $("a[href^='/watch/']").attr("href");
@@ -58,7 +63,9 @@ module.exports = async (req, res) => {
     const idParam = req.query?.id || req.query?.anilistId;
     const anilistId = parseInt(idParam, 10);
     if (!anilistId || Number.isNaN(anilistId)) {
-      return res.status(400).json({ error: "Query param 'id' (AniList ID) is required" });
+      return res
+        .status(400)
+        .json({ error: "Query param 'id' (AniList ID) is required" });
     }
 
     const animeName = await getAnimeNameFromAniList(anilistId);
@@ -74,11 +81,11 @@ module.exports = async (req, res) => {
       anilistId,
       animeName,
       kebabName,
-      hiAnimeSlug
+      hiAnimeSlug,
     });
   } catch (error) {
-    return res.status(500).json({ error: "Failed to resolve mapping", message: error.message });
+    return res
+      .status(500)
+      .json({ error: "Failed to resolve mapping", message: error.message });
   }
 };
-
-
