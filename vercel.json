@@ -5,6 +5,10 @@
       "maxDuration": 300,
       "memory": 1024
     },
+    "api/external.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
     "api/serve.js": {
       "maxDuration": 30,
       "memory": 512
@@ -21,6 +25,7 @@
   "routes": [
     { "src": "/api/translate", "dest": "/api/translate.js" },
     { "src": "/api/serve(?:/.*)?", "dest": "/api/serve.js" },
+    { "src": "/api/external(?:/.*)?", "dest": "/api/external.js" },
     { "src": "/api/download(?:/.*)?", "dest": "/api/download.js" },
     { "src": "/api/anilist-to-hianimez(?:/.*)?", "dest": "/api/anilist-to-hianimez.js" }
   ]
