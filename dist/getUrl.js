@@ -137,6 +137,7 @@ async function extractMp4FromMp4Upload(embedUrl) {
         if (!content)
             continue;
         const match = content.match(/https?:\/\/[^"']+\.mp4/);
+        console.log(match);
         if (match)
             return match[0];
     }
