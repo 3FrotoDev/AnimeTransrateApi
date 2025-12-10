@@ -10,7 +10,8 @@ exports.extractMp4FromMp4Upload = extractMp4FromMp4Upload;
 exports.getVideoUrl = getVideoUrl;
 const axios_1 = __importDefault(require("axios"));
 const cheerio_1 = require("cheerio");
-const puppeteer_1 = __importDefault(require("puppeteer"));
+const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
+const chrome_aws_lambda_1 = __importDefault(require("chrome-aws-lambda"));
 // ===============================================
 // 1) Basic HTML Scraper (<video> أو <source>)
 // ===============================================
@@ -42,11 +43,9 @@ async function getDirectVideoUrl(embedUrl) {
             headers: { "User-Agent": "Mozilla/5.0" },
         });
         const $ = (0, cheerio_1.load)(data);
-        // 4shared نادراً يظهر <source>
         const mp4 = $("source").attr("src");
         if (mp4)
             return mp4;
-        // ابحث داخل السكريبت عن link.mp4
         const scripts = $("script").toArray();
         for (const script of scripts) {
             const content = $(script).html();
@@ -64,7 +63,7 @@ async function getDirectVideoUrl(embedUrl) {
     }
 }
 // ===================================================
-// 3) Puppeteer Sniffing (لـ videa.hu)
+// 3) Puppeteer Sniffing (videa.hu) - Serverless ready
 // ===================================================
 async function getMp4(embedUrl) {
     let finalUrl = null;
@@ -76,12 +75,13 @@ async function getMp4(embedUrl) {
         "imasdk.googleapis.com",
     ];
     try {
-        const browser = await puppeteer_1.default.launch({
-            headless: true,
-            args: ["--no-sandbox"],
+        const browser = await puppeteer_core_1.default.launch({
+            args: chrome_aws_lambda_1.default.args,
+            defaultViewport: chrome_aws_lambda_1.default.defaultViewport,
+            executablePath: await chrome_aws_lambda_1.default.executablePath,
+            headless: chrome_aws_lambda_1.default.headless,
         });
         const page = await browser.newPage();
-        // block ads
         await page.setRequestInterception(true);
         page.on("request", (req) => {
             const url = req.url();
@@ -90,25 +90,21 @@ async function getMp4(embedUrl) {
             }
             req.continue();
         });
-        // catch mp4
         page.on("response", (res) => {
             const url = res.url();
-            if (url.includes(".mp4") &&
-                !blockedAdsDomains.some((d) => url.includes(d))) {
+            if (url.includes(".mp4") && !blockedAdsDomains.some((d) => url.includes(d))) {
                 finalUrl = url;
             }
         });
         await page.goto(embedUrl, { waitUntil: "networkidle2", timeout: 60000 });
-        // اضغط Play لتشغيل الإعلان + الفيديو
+        // اضغط Play إذا موجود
         try {
             await page.click(".vjs-big-play-button");
         }
         catch { }
-        // ❌ بديل waitForTimeout
-        // جلب src الحقيقي بعد الإعلان
+        // fallback: جلب src من الفيديو
         if (!finalUrl) {
             finalUrl = await page.evaluate(() => {
-                //@ts-ignore
                 const vid = document.querySelector("video");
                 return vid ? vid.src : null;
             });
@@ -117,48 +113,48 @@ async function getMp4(embedUrl) {
         return finalUrl;
     }
     catch (err) {
-        console.log("Error:", err.message);
+        console.log("getMp4 error:", err.message);
         return null;
     }
 }
+// ===================================================
+// 4) mp4upload extractor
+// ===================================================
 async function extractMp4FromMp4Upload(embedUrl) {
-    const { data } = await axios_1.default.get(embedUrl, {
-        headers: { "User-Agent": "Mozilla/5.0" }
-    });
-    const $ = (0, cheerio_1.load)(data);
-    // 1) من ال video tag
-    const vid = $("video").attr("src");
-    if (vid)
-        return vid;
-    // 2) من JavaScript player.src({...})
-    const scripts = $("script").toArray();
-    for (const s of scripts) {
-        const content = $(s).html();
-        if (!content)
-            continue;
-        const match = content.match(/https?:\/\/[^"']+\.mp4/);
-        console.log(match);
-        if (match)
-            return match[0];
+    try {
+        const { data } = await axios_1.default.get(embedUrl, {
+            headers: { "User-Agent": "Mozilla/5.0" },
+        });
+        const $ = (0, cheerio_1.load)(data);
+        const vid = $("video").attr("src");
+        if (vid)
+            return vid;
+        const scripts = $("script").toArray();
+        for (const s of scripts) {
+            const content = $(s).html();
+            if (!content)
+                continue;
+            const match = content.match(/https?:\/\/[^"']+\.mp4/);
+            if (match)
+                return match[0];
+        }
+        return null;
     }
-    return null;
+    catch (err) {
+        console.log("extractMp4FromMp4Upload error:", err.message);
+        return null;
+    }
 }
 // ===================================================
-// 4) DOMAIN ROUTER (Auto detect by hostname)
+// 5) DOMAIN ROUTER (Auto detect by hostname)
 // ===================================================
 async function getVideoUrl(embedUrl) {
     const domain = new URL(embedUrl).hostname;
     console.log("Extracting from:", domain);
-    // -----------------------------
-    // 4SHARED
-    // -----------------------------
     if (domain.includes("4shared.com")) {
         console.log("Using 4shared extractor…");
         return await getDirectVideoUrl(embedUrl);
     }
-    // -----------------------------
-    // VIDEA
-    // -----------------------------
     if (domain.includes("videa.hu") || domain.includes("video6.videa.hu")) {
         console.log("Using Videa Puppeteer extractor…");
         return await getMp4(embedUrl);
@@ -170,15 +166,3 @@ async function getVideoUrl(embedUrl) {
     console.log("Using fallback extractor…");
     return await extractMp4(embedUrl);
 }
-// async function test() {
-//   const url1 = "https://www.4shared.com/web/embed/file/zWWEm5lWfa";
-//   const url2 = "https://videa.hu/player?v=CyxIUCUdcY38e1mQ";
-//   const url3 = "https://www.mp4upload.com/embed-dwwcjb56c65w.html"
-//   console.log("4SHARED RESULT:");
-//   console.log(await getVideoUrl(url1));
-//   console.log("VIDEA RESULT:");
-//   console.log(await getVideoUrl(url2));
-//   console.log("MP4UPLOAD RESULT:");
-//   console.log(await getVideoUrl(url3));
-// }
-// test();
