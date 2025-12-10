@@ -16,7 +16,9 @@ module.exports = async (req, res) => {
 
     console.log(videoUrl)
     const a = await getVideoUrl(videoUrl)
-
+    if(!a){
+      return res.status(500).json({ a })
+    }
     return res.status(200).json({ a })
   } catch (error) {
     return res.status(500).json({ error: "Failed", message: error.message });
