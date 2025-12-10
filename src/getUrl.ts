@@ -2,6 +2,9 @@ import axios from "axios";
 import { load } from "cheerio";
 import puppeteer from "puppeteer";
 
+// ===============================================
+// 1) Basic HTML Scraper (<video> أو <source>)
+// ===============================================
 export async function extractMp4(embedUrl:string) {
   try {
     const { data } = await axios.get(embedUrl, {
@@ -23,6 +26,9 @@ export async function extractMp4(embedUrl:string) {
   }
 }
 
+// ===================================================
+// 2) Direct Extractor for 4shared (<script> أو <source>)
+// ===================================================
 export async function getDirectVideoUrl(embedUrl:string) {
   try {
     const { data } = await axios.get(embedUrl, {
@@ -31,9 +37,11 @@ export async function getDirectVideoUrl(embedUrl:string) {
 
     const $ = load(data);
 
+    // 4shared نادراً يظهر <source>
     const mp4 = $("source").attr("src");
     if (mp4) return mp4;
 
+    // ابحث داخل السكريبت عن link.mp4
     const scripts = $("script").toArray();
     for (const script of scripts) {
       const content = $(script).html();
@@ -50,6 +58,9 @@ export async function getDirectVideoUrl(embedUrl:string) {
   }
 }
 
+// ===================================================
+// 3) Puppeteer Sniffing (لـ videa.hu)
+// ===================================================
 
 export async function getMp4(embedUrl:string) {
   let finalUrl = null;
@@ -69,6 +80,7 @@ export async function getMp4(embedUrl:string) {
 
     const page = await browser.newPage();
 
+    // block ads
     await page.setRequestInterception(true);
     page.on("request", (req) => {
       const url = req.url();
@@ -85,21 +97,21 @@ export async function getMp4(embedUrl:string) {
         url.includes(".mp4") &&
         !blockedAdsDomains.some((d) => url.includes(d))
       ) {
-        //@ts-ignore
         finalUrl = url;
       }
     });
 
     await page.goto(embedUrl, { waitUntil: "networkidle2", timeout: 60000 });
 
+    // اضغط Play لتشغيل الإعلان + الفيديو
     try {
       await page.click(".vjs-big-play-button");
     } catch {}
 
-    await new Promise((res) => setTimeout(res, 15000));
+    // ❌ بديل waitForTimeout
 
+    // جلب src الحقيقي بعد الإعلان
     if (!finalUrl) {
-      //@ts-ignore
       finalUrl = await page.evaluate(() => {
         //@ts-ignore
         const vid = document.querySelector("video");
@@ -122,9 +134,11 @@ export async function extractMp4FromMp4Upload(embedUrl:string) {
   
     const $ = load(data);
   
+    // 1) من ال video tag
     const vid = $("video").attr("src");
     if (vid) return vid;
   
+    // 2) من JavaScript player.src({...})
     const scripts = $("script").toArray();
     for (const s of scripts) {
       const content = $(s).html();
@@ -137,16 +151,25 @@ export async function extractMp4FromMp4Upload(embedUrl:string) {
     return null;
   }
 
+// ===================================================
+// 4) DOMAIN ROUTER (Auto detect by hostname)
+// ===================================================
 export async function getVideoUrl(embedUrl:string) {
   const domain = new URL(embedUrl).hostname;
 
   console.log("Extracting from:", domain);
 
+  // -----------------------------
+  // 4SHARED
+  // -----------------------------
   if (domain.includes("4shared.com")) {
     console.log("Using 4shared extractor…");
     return await getDirectVideoUrl(embedUrl);
   }
 
+  // -----------------------------
+  // VIDEA
+  // -----------------------------
   if (domain.includes("videa.hu") || domain.includes("video6.videa.hu")) {
     console.log("Using Videa Puppeteer extractor…");
     return await getMp4(embedUrl);

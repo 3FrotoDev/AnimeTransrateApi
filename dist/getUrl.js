@@ -11,6 +11,9 @@ exports.getVideoUrl = getVideoUrl;
 const axios_1 = __importDefault(require("axios"));
 const cheerio_1 = require("cheerio");
 const puppeteer_1 = __importDefault(require("puppeteer"));
+// ===============================================
+// 1) Basic HTML Scraper (<video> أو <source>)
+// ===============================================
 async function extractMp4(embedUrl) {
     try {
         const { data } = await axios_1.default.get(embedUrl, {
@@ -30,15 +33,20 @@ async function extractMp4(embedUrl) {
         return null;
     }
 }
+// ===================================================
+// 2) Direct Extractor for 4shared (<script> أو <source>)
+// ===================================================
 async function getDirectVideoUrl(embedUrl) {
     try {
         const { data } = await axios_1.default.get(embedUrl, {
             headers: { "User-Agent": "Mozilla/5.0" },
         });
         const $ = (0, cheerio_1.load)(data);
+        // 4shared نادراً يظهر <source>
         const mp4 = $("source").attr("src");
         if (mp4)
             return mp4;
+        // ابحث داخل السكريبت عن link.mp4
         const scripts = $("script").toArray();
         for (const script of scripts) {
             const content = $(script).html();
@@ -55,6 +63,9 @@ async function getDirectVideoUrl(embedUrl) {
         return null;
     }
 }
+// ===================================================
+// 3) Puppeteer Sniffing (لـ videa.hu)
+// ===================================================
 async function getMp4(embedUrl) {
     let finalUrl = null;
     const blockedAdsDomains = [
@@ -70,6 +81,7 @@ async function getMp4(embedUrl) {
             args: ["--no-sandbox"],
         });
         const page = await browser.newPage();
+        // block ads
         await page.setRequestInterception(true);
         page.on("request", (req) => {
             const url = req.url();
@@ -83,18 +95,18 @@ async function getMp4(embedUrl) {
             const url = res.url();
             if (url.includes(".mp4") &&
                 !blockedAdsDomains.some((d) => url.includes(d))) {
-                //@ts-ignore
                 finalUrl = url;
             }
         });
         await page.goto(embedUrl, { waitUntil: "networkidle2", timeout: 60000 });
+        // اضغط Play لتشغيل الإعلان + الفيديو
         try {
             await page.click(".vjs-big-play-button");
         }
         catch { }
-        await new Promise((res) => setTimeout(res, 15000));
+        // ❌ بديل waitForTimeout
+        // جلب src الحقيقي بعد الإعلان
         if (!finalUrl) {
-            //@ts-ignore
             finalUrl = await page.evaluate(() => {
                 //@ts-ignore
                 const vid = document.querySelector("video");
@@ -114,9 +126,11 @@ async function extractMp4FromMp4Upload(embedUrl) {
         headers: { "User-Agent": "Mozilla/5.0" }
     });
     const $ = (0, cheerio_1.load)(data);
+    // 1) من ال video tag
     const vid = $("video").attr("src");
     if (vid)
         return vid;
+    // 2) من JavaScript player.src({...})
     const scripts = $("script").toArray();
     for (const s of scripts) {
         const content = $(s).html();
@@ -128,13 +142,22 @@ async function extractMp4FromMp4Upload(embedUrl) {
     }
     return null;
 }
+// ===================================================
+// 4) DOMAIN ROUTER (Auto detect by hostname)
+// ===================================================
 async function getVideoUrl(embedUrl) {
     const domain = new URL(embedUrl).hostname;
     console.log("Extracting from:", domain);
+    // -----------------------------
+    // 4SHARED
+    // -----------------------------
     if (domain.includes("4shared.com")) {
         console.log("Using 4shared extractor…");
         return await getDirectVideoUrl(embedUrl);
     }
+    // -----------------------------
+    // VIDEA
+    // -----------------------------
     if (domain.includes("videa.hu") || domain.includes("video6.videa.hu")) {
         console.log("Using Videa Puppeteer extractor…");
         return await getMp4(embedUrl);

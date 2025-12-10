@@ -8,7 +8,8 @@ const serveHandler = require("./api/serve");
 const downloadHandler = require("./api/download");
 const anilistToHiAnimeHandler = require("./api/anilist-to-hianimez");
 const subdlHandler = require("./api/subdl");
-const externalHanler = require("./api/external")
+const externalHandler = require("./api/external")
+const extractorHandler = require("./api/extractor")
 const app = express();
 
 const limiter = rateLimit({
@@ -48,7 +49,8 @@ app.get("/", (req, res) => {
       "/api/download",
       "/api/anilist-to-hianimez",
       "/api/subdl",
-      "/api/external"
+      "/api/external",
+      "/api/extractor"
     ] 
   });
 });
@@ -58,7 +60,8 @@ app.use("/api/serve", serveHandler);
 app.use("/api/download", downloadHandler);
 app.use("/api/anilist-to-hianimez", anilistToHiAnimeHandler);
 app.use("/api/subdl", subdlHandler);
-app.use("/api/external", externalHanler)
+app.use("/api/external", externalHandler)
+app.use("/api/extractor", extractorHandler)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 

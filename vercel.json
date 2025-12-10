@@ -13,6 +13,10 @@
       "maxDuration": 30,
       "memory": 512
     },
+    "api/extractor": {
+      "maxDuration": 30,
+      "memory": 512
+    },
     "api/download.js": {
       "maxDuration": 60,
       "memory": 1024
@@ -26,6 +30,7 @@
     { "src": "/api/translate", "dest": "/api/translate.js" },
     { "src": "/api/serve(?:/.*)?", "dest": "/api/serve.js" },
     { "src": "/api/external(?:/.*)?", "dest": "/api/external.js" },
+    { "src": "/api/extractor(?:/.*)?", "dest": "/api/extractor.js" },
     { "src": "/api/download(?:/.*)?", "dest": "/api/download.js" },
     { "src": "/api/anilist-to-hianimez(?:/.*)?", "dest": "/api/anilist-to-hianimez.js" }
   ]
