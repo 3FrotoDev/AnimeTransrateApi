@@ -1,11 +1,11 @@
 import axios from "axios";
 import { load } from "cheerio";
 import puppeteer from "puppeteer-core";
-import chromium from "chrome-aws-lambda";
+import chromium from "@sparticuz/chromium";
 
-// ===============================================
-// 1) Basic HTML Scraper (<video> أو <source>)
-// ===============================================
+// ===================================================
+// 1) Basic HTML Scraper
+// ===================================================
 export async function extractMp4(embedUrl: string) {
   try {
     const { data } = await axios.get(embedUrl, {
@@ -28,7 +28,7 @@ export async function extractMp4(embedUrl: string) {
 }
 
 // ===================================================
-// 2) Direct Extractor for 4shared (<script> أو <source>)
+// 2) 4shared extractor
 // ===================================================
 export async function getDirectVideoUrl(embedUrl: string) {
   try {
@@ -58,15 +58,14 @@ export async function getDirectVideoUrl(embedUrl: string) {
 }
 
 // ===================================================
-// 3) Puppeteer Sniffing (videa.hu) - Serverless ready
+// 3) Videa.hu extractor (Puppeteer - Vercel compatible)
 // ===================================================
 export async function getMp4(embedUrl: string) {
   let finalUrl: string | null = null;
+
   const blockedAdsDomains = [
-    "cdn.nwmgroups.hu",
     "googleapis.com",
     "doubleclick.net",
-    "gahu.hit.gemius.pl",
     "imasdk.googleapis.com",
   ];
 
@@ -74,13 +73,14 @@ export async function getMp4(embedUrl: string) {
     const browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath,
+      executablePath: await chromium.executablePath(),
       headless: chromium.headless,
     });
 
     const page = await browser.newPage();
 
     await page.setRequestInterception(true);
+
     page.on("request", (req) => {
       const url = req.url();
       if (blockedAdsDomains.some((d) => url.includes(d))) {
@@ -96,18 +96,21 @@ export async function getMp4(embedUrl: string) {
       }
     });
 
-    await page.goto(embedUrl, { waitUntil: "networkidle2", timeout: 60000 });
+    await page.goto(embedUrl, {
+      waitUntil: "networkidle2",
+      timeout: 60000,
+    });
 
-    // اضغط Play إذا موجود
+    // Try clicking Play button
     try {
       await page.click(".vjs-big-play-button");
     } catch {}
 
-    // fallback: جلب src من الفيديو
+    // Fallback: get video src
     if (!finalUrl) {
       finalUrl = await page.evaluate(() => {
-        const vid = document.querySelector("video");
-        return vid ? vid.src : null;
+        const vid = document.querySelector("video") as HTMLVideoElement | null;
+        return vid?.src ?? null;
       });
     }
 
@@ -150,27 +153,23 @@ export async function extractMp4FromMp4Upload(embedUrl: string) {
 }
 
 // ===================================================
-// 5) DOMAIN ROUTER (Auto detect by hostname)
+// 5) Domain Router
 // ===================================================
 export async function getVideoUrl(embedUrl: string) {
   const domain = new URL(embedUrl).hostname;
   console.log("Extracting from:", domain);
 
   if (domain.includes("4shared.com")) {
-    console.log("Using 4shared extractor…");
     return await getDirectVideoUrl(embedUrl);
   }
 
   if (domain.includes("videa.hu") || domain.includes("video6.videa.hu")) {
-    console.log("Using Videa Puppeteer extractor…");
     return await getMp4(embedUrl);
   }
 
   if (domain.includes("mp4upload")) {
-    console.log("Using mp4upload extractor...");
     return await extractMp4FromMp4Upload(embedUrl);
   }
 
-  console.log("Using fallback extractor…");
   return await extractMp4(embedUrl);
 }

@@ -11,10 +11,10 @@ exports.getVideoUrl = getVideoUrl;
 const axios_1 = __importDefault(require("axios"));
 const cheerio_1 = require("cheerio");
 const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
-const chrome_aws_lambda_1 = __importDefault(require("chrome-aws-lambda"));
-// ===============================================
-// 1) Basic HTML Scraper (<video> أو <source>)
-// ===============================================
+const chromium_1 = __importDefault(require("@sparticuz/chromium"));
+// ===================================================
+// 1) Basic HTML Scraper
+// ===================================================
 async function extractMp4(embedUrl) {
     try {
         const { data } = await axios_1.default.get(embedUrl, {
@@ -35,7 +35,7 @@ async function extractMp4(embedUrl) {
     }
 }
 // ===================================================
-// 2) Direct Extractor for 4shared (<script> أو <source>)
+// 2) 4shared extractor
 // ===================================================
 async function getDirectVideoUrl(embedUrl) {
     try {
@@ -63,23 +63,21 @@ async function getDirectVideoUrl(embedUrl) {
     }
 }
 // ===================================================
-// 3) Puppeteer Sniffing (videa.hu) - Serverless ready
+// 3) Videa.hu extractor (Puppeteer - Vercel compatible)
 // ===================================================
 async function getMp4(embedUrl) {
     let finalUrl = null;
     const blockedAdsDomains = [
-        "cdn.nwmgroups.hu",
         "googleapis.com",
         "doubleclick.net",
-        "gahu.hit.gemius.pl",
         "imasdk.googleapis.com",
     ];
     try {
         const browser = await puppeteer_core_1.default.launch({
-            args: chrome_aws_lambda_1.default.args,
-            defaultViewport: chrome_aws_lambda_1.default.defaultViewport,
-            executablePath: await chrome_aws_lambda_1.default.executablePath,
-            headless: chrome_aws_lambda_1.default.headless,
+            args: chromium_1.default.args,
+            defaultViewport: chromium_1.default.defaultViewport,
+            executablePath: await chromium_1.default.executablePath(),
+            headless: chromium_1.default.headless,
         });
         const page = await browser.newPage();
         await page.setRequestInterception(true);
@@ -96,17 +94,20 @@ async function getMp4(embedUrl) {
                 finalUrl = url;
             }
         });
-        await page.goto(embedUrl, { waitUntil: "networkidle2", timeout: 60000 });
-        // اضغط Play إذا موجود
+        await page.goto(embedUrl, {
+            waitUntil: "networkidle2",
+            timeout: 60000,
+        });
+        // Try clicking Play button
         try {
             await page.click(".vjs-big-play-button");
         }
         catch { }
-        // fallback: جلب src من الفيديو
+        // Fallback: get video src
         if (!finalUrl) {
             finalUrl = await page.evaluate(() => {
                 const vid = document.querySelector("video");
-                return vid ? vid.src : null;
+                return vid?.src ?? null;
             });
         }
         await browser.close();
@@ -146,23 +147,19 @@ async function extractMp4FromMp4Upload(embedUrl) {
     }
 }
 // ===================================================
-// 5) DOMAIN ROUTER (Auto detect by hostname)
+// 5) Domain Router
 // ===================================================
 async function getVideoUrl(embedUrl) {
     const domain = new URL(embedUrl).hostname;
     console.log("Extracting from:", domain);
     if (domain.includes("4shared.com")) {
-        console.log("Using 4shared extractor…");
         return await getDirectVideoUrl(embedUrl);
     }
     if (domain.includes("videa.hu") || domain.includes("video6.videa.hu")) {
-        console.log("Using Videa Puppeteer extractor…");
         return await getMp4(embedUrl);
     }
     if (domain.includes("mp4upload")) {
-        console.log("Using mp4upload extractor...");
         return await extractMp4FromMp4Upload(embedUrl);
     }
-    console.log("Using fallback extractor…");
     return await extractMp4(embedUrl);
 }
