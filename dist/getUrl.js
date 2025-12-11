@@ -7,6 +7,7 @@ exports.extractMp4 = extractMp4;
 exports.getDirectVideoUrl = getDirectVideoUrl;
 exports.getMp4 = getMp4;
 exports.extractMp4FromMp4Upload = extractMp4FromMp4Upload;
+exports.getVideaHighestQuality = getVideaHighestQuality;
 exports.getVideoUrl = getVideoUrl;
 const axios_1 = __importDefault(require("axios"));
 const cheerio_1 = require("cheerio");
@@ -157,6 +158,67 @@ async function extractMp4FromMp4Upload(embedUrl) {
         return null;
     }
 }
+async function getVideaHighestQuality(url) {
+    let finalUrl = null;
+    const blockedAds = [
+        "doubleclick.net",
+        "googlesyndication.com",
+        "imasdk.googleapis.com",
+    ];
+    const browser = await puppeteer_1.default.launch({
+        headless: "new",
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+    const page = await browser.newPage();
+    await page.setRequestInterception(true);
+    page.on("request", (req) => {
+        const u = req.url();
+        if (blockedAds.some((d) => u.includes(d)))
+            return req.abort();
+        req.continue();
+    });
+    await page.goto(url, { waitUntil: "networkidle2" });
+    try {
+        await page.click(".videa-toolbar-settings");
+        await page.waitForSelector(".settings-main-menu", { visible: true });
+    }
+    catch {
+        console.log("Failed to open settings menu");
+    }
+    try {
+        const items = await page.$$(".settings-main-menu-item");
+        await items[0].click();
+        await page.waitForSelector(".settings-version-selector-block .submenu-item", {
+            visible: true,
+        });
+    }
+    catch {
+        console.log("Failed to open quality submenu");
+    }
+    const qualities = await page.$$eval(".settings-version-selector-block .submenu-item", (els) => els.map((e) => e.innerText.trim()));
+    console.log("Available qualities:", qualities);
+    try {
+        await page.click(".settings-version-selector-block .submenu-item");
+    }
+    catch {
+        console.log("Quality selection failed");
+    }
+    try {
+        await page.click(".videa-toolbar-playpause", { delay: 500 }).catch(() => { });
+    }
+    catch {
+        console.log("asd");
+    }
+    if (!finalUrl) {
+        finalUrl = await page.evaluate(() => {
+            //@ts-ignore
+            const vid = document.querySelector("video");
+            return vid ? vid.src : null;
+        });
+    }
+    await browser.close();
+    return finalUrl;
+}
 // ===================================================
 // 5) Domain Router
 // ===================================================
@@ -167,7 +229,7 @@ async function getVideoUrl(embedUrl) {
         return await getDirectVideoUrl(embedUrl);
     }
     if (domain.includes("videa.hu") || domain.includes("video6.videa.hu")) {
-        return await getMp4(embedUrl);
+        return await getVideaHighestQuality(embedUrl);
     }
     if (domain.includes("mp4upload")) {
         return await extractMp4FromMp4Upload(embedUrl);
