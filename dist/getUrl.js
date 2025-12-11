@@ -10,6 +10,7 @@ exports.extractMp4FromMp4Upload = extractMp4FromMp4Upload;
 exports.getVideoUrl = getVideoUrl;
 const axios_1 = __importDefault(require("axios"));
 const cheerio_1 = require("cheerio");
+const puppeteer_1 = __importDefault(require("puppeteer"));
 const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
 const chromium_1 = __importDefault(require("@sparticuz/chromium"));
 // ===================================================
@@ -73,12 +74,22 @@ async function getMp4(embedUrl) {
         "imasdk.googleapis.com",
     ];
     try {
-        const browser = await puppeteer_core_1.default.launch({
-            args: chromium_1.default.args,
-            defaultViewport: chromium_1.default.defaultViewport,
-            executablePath: await chromium_1.default.executablePath(),
-            headless: chromium_1.default.headless,
-        });
+        let browser;
+        if (process.env.VERCEL_ENV === 'production') {
+            const executablePath = await chromium_1.default.executablePath();
+            browser = await puppeteer_core_1.default.launch({
+                executablePath,
+                args: chromium_1.default.args,
+                headless: chromium_1.default.headless,
+                defaultViewport: chromium_1.default.defaultViewport
+            });
+        }
+        else {
+            browser = await puppeteer_1.default.launch({
+                headless: 'new',
+                args: ['--no-sandbox', '--disable-setuid-sandbox']
+            });
+        }
         const page = await browser.newPage();
         await page.setRequestInterception(true);
         page.on("request", (req) => {

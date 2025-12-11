@@ -1,7 +1,8 @@
 import axios from "axios";
 import { load } from "cheerio";
-import puppeteer from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
+import puppeteer from 'puppeteer'
+import puppeteerCore from 'puppeteer-core'
+import chromium from '@sparticuz/chromium'
 
 // ===================================================
 // 1) Basic HTML Scraper
@@ -70,12 +71,22 @@ export async function getMp4(embedUrl: string) {
   ];
 
   try {
-    const browser = await puppeteer.launch({
-      args: chromium.args,
-      defaultViewport: chromium.defaultViewport,
-      executablePath: await chromium.executablePath(),
-      headless: chromium.headless,
-    });
+
+    let browser
+    if (process.env.VERCEL_ENV === 'production') {
+      const executablePath = await chromium.executablePath()
+      browser = await puppeteerCore.launch({
+        executablePath,
+        args: chromium.args,
+        headless: chromium.headless,
+        defaultViewport: chromium.defaultViewport
+      })
+    } else {
+      browser = await puppeteer.launch({
+        headless: 'new',
+        args: ['--no-sandbox', '--disable-setuid-sandbox']
+      })
+    }
 
     const page = await browser.newPage();
 
