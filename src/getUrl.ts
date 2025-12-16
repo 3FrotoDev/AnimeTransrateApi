@@ -172,10 +172,21 @@ export async function getVideaHighestQuality(url: string) {
     "imasdk.googleapis.com",
   ];
 
-  const browser = await puppeteer.launch({
-    headless: "new",
-    args: ["--no-sandbox", "--disable-setuid-sandbox"],
-  });
+  let browser
+  if (process.env.IS_LOCAL !== 'true') {
+    const executablePath = await chromium.executablePath()
+    browser = await puppeteerCore.launch({
+      executablePath,
+      args: chromium.args,
+      headless: chromium.headless,
+      defaultViewport: chromium.defaultViewport
+    })
+  } else {
+    browser = await puppeteer.launch({
+      headless: 'new',
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    })
+  }
 
   const page = await browser.newPage();
 
@@ -220,7 +231,7 @@ export async function getVideaHighestQuality(url: string) {
   }
 
   try {
-    await page.click(".videa-toolbar-playpause", { delay: 500 }).catch(() => {})
+    await page.click(".videa-toolbar-playpause").catch(() => {})
   } catch {
     console.log("asd")
   }

@@ -165,10 +165,22 @@ async function getVideaHighestQuality(url) {
         "googlesyndication.com",
         "imasdk.googleapis.com",
     ];
-    const browser = await puppeteer_1.default.launch({
-        headless: "new",
-        args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
+    let browser;
+    if (process.env.IS_LOCAL !== 'true') {
+        const executablePath = await chromium_1.default.executablePath();
+        browser = await puppeteer_core_1.default.launch({
+            executablePath,
+            args: chromium_1.default.args,
+            headless: chromium_1.default.headless,
+            defaultViewport: chromium_1.default.defaultViewport
+        });
+    }
+    else {
+        browser = await puppeteer_1.default.launch({
+            headless: 'new',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+    }
     const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on("request", (req) => {
@@ -204,7 +216,7 @@ async function getVideaHighestQuality(url) {
         console.log("Quality selection failed");
     }
     try {
-        await page.click(".videa-toolbar-playpause", { delay: 500 }).catch(() => { });
+        await page.click(".videa-toolbar-playpause").catch(() => { });
     }
     catch {
         console.log("asd");
