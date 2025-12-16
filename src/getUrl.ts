@@ -1,8 +1,8 @@
 import axios from "axios";
 import { load } from "cheerio";
-import puppeteer from 'puppeteer'
-import puppeteerCore from 'puppeteer-core'
-import chromium from '@sparticuz/chromium'
+import puppeteer from "puppeteer";
+import puppeteerCore from "puppeteer-core";
+import chromium from "@sparticuz/chromium";
 
 // ===================================================
 // 1) Basic HTML Scraper
@@ -71,21 +71,20 @@ export async function getMp4(embedUrl: string) {
   ];
 
   try {
-
-    let browser
-    if (process.env.VERCEL_ENV === 'production') {
-      const executablePath = await chromium.executablePath()
+    let browser;
+    if (process.env.IS_LOCAL !== "true") {
+      const executablePath = await chromium.executablePath();
       browser = await puppeteerCore.launch({
         executablePath,
         args: chromium.args,
         headless: chromium.headless,
-        defaultViewport: chromium.defaultViewport
-      })
+        defaultViewport: chromium.defaultViewport,
+      });
     } else {
       browser = await puppeteer.launch({
-        headless: 'new',
-        args: ['--no-sandbox', '--disable-setuid-sandbox']
-      })
+        headless: "new",
+        args: ["--no-sandbox", "--disable-setuid-sandbox"],
+      });
     }
 
     const page = await browser.newPage();
@@ -102,7 +101,10 @@ export async function getMp4(embedUrl: string) {
 
     page.on("response", (res) => {
       const url = res.url();
-      if (url.includes(".mp4") && !blockedAdsDomains.some((d) => url.includes(d))) {
+      if (
+        url.includes(".mp4") &&
+        !blockedAdsDomains.some((d) => url.includes(d))
+      ) {
         finalUrl = url;
       }
     });
@@ -165,31 +167,34 @@ export async function extractMp4FromMp4Upload(embedUrl: string) {
 
 export async function getVideaHighestQuality(url: string) {
   let finalUrl: string | null = null;
-
   const blockedAds = [
     "doubleclick.net",
     "googlesyndication.com",
     "imasdk.googleapis.com",
   ];
 
-  let browser
-  if (process.env.IS_LOCAL !== 'true') {
-    const executablePath = await chromium.executablePath()
+  const preferredOrder = ["1080p", "720p", "480p"];
+  const videoLinks = new Set<string>();
+
+  let browser;
+  if (process.env.IS_LOCAL !== "true") {
+    const executablePath = await chromium.executablePath();
     browser = await puppeteerCore.launch({
       executablePath,
       args: chromium.args,
       headless: chromium.headless,
-      defaultViewport: chromium.defaultViewport
-    })
+      defaultViewport: chromium.defaultViewport,
+    });
   } else {
     browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
-    })
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
   }
 
   const page = await browser.newPage();
 
+  // Block ads
   await page.setRequestInterception(true);
   page.on("request", (req) => {
     const u = req.url();
@@ -197,53 +202,75 @@ export async function getVideaHighestQuality(url: string) {
     req.continue();
   });
 
+  // Promise لإيقاف فور ظهور 1080p
+  let resolveFinal: (link: string) => void;
+  const finalLinkPromise = new Promise<string>((resolve) => {
+    resolveFinal = resolve;
+  });
+
+  page.on("response", (res) => {
+    const url = res.url();
+    if (
+      (url.includes("/480p/") || url.includes("/720p/") || url.includes("/1080p/") || url.includes(".m3u8")) &&
+      !blockedAds.some(d => url.includes(d))
+    ) {
+      videoLinks.add(url);
+
+      // فور ظهور 1080p استخدمه مباشرة
+      if (url.includes("/1080p/")) {
+        resolveFinal?.(url);
+      }
+    }
+  });
 
   await page.goto(url, { waitUntil: "networkidle2" });
 
+  // فتح الإعدادات
   try {
     await page.click(".videa-toolbar-settings");
     await page.waitForSelector(".settings-main-menu", { visible: true });
-  } catch {
-    console.log("Failed to open settings menu");
-  }
+  } catch {}
 
   try {
     const items = await page.$$(".settings-main-menu-item");
     await items[0].click();
-    await page.waitForSelector(".settings-version-selector-block .submenu-item", {
-      visible: true,
-    });
-  } catch {
-    console.log("Failed to open quality submenu");
-  }
+    await page.waitForSelector(".settings-version-selector-block .submenu-item", { visible: true });
+  } catch {}
 
-  const qualities = await page.$$eval(
-    ".settings-version-selector-block .submenu-item",
-    (els) => els.map((e) => e.innerText.trim())
-  );
-
-  console.log("Available qualities:", qualities);
-
+  // اختيار أعلى جودة (الأولى بالقائمة)
   try {
-    await page.click(".settings-version-selector-block .submenu-item");
-  } catch {
-    console.log("Quality selection failed");
-  }
+    const items = await page.$$(
+      ".settings-version-selector-block .submenu-item"
+    );
+    await items[0].click();
+  } catch {}
 
+  // تشغيل الفيديو
   try {
-    await page.click(".videa-toolbar-playpause").catch(() => {})
-  } catch {
-    console.log("asd")
-  }
+    await page.click(".videa-toolbar-playpause");
+  } catch {}
 
-  
+  // الانتظار حتى ظهور 1080p أو 7 ثواني كحد أقصى
+  try {
+    finalUrl = await Promise.race([
+      finalLinkPromise,
+      new Promise<string>((resolve) => setTimeout(() => resolve(null), 7000)),
+    ]);
+  } catch {}
+
+  // إذا لم يظهر 1080p، اختر أعلى جودة متاحة
   if (!finalUrl) {
-    finalUrl = await page.evaluate(() => {
-      //@ts-ignore
-      const vid = document.querySelector("video");
-      return vid ? vid.src : null;
-    });
+    for (const q of preferredOrder) {
+      const candidates = [...videoLinks].filter(l => l.includes(`/${q}/`));
+      if (candidates.length > 0) {
+        finalUrl = candidates[0];
+        break;
+      }
+    }
   }
+
+  console.log("Final selected video link:", finalUrl);
+  console.log("All captured video links:", [...videoLinks]);
 
   await browser.close();
   return finalUrl;
