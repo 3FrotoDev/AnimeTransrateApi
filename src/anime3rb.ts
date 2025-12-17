@@ -39,11 +39,11 @@ export const getAnime3rb = async (id: number) => {
   await page.setUserAgent(
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36"
   );
-  
+
   await page.setExtraHTTPHeaders({
     "accept-language": "ar,en-US;q=0.9,en;q=0.8",
   });
-  
+
   await page.setViewport({ width: 1400, height: 900 });
 
   page.on("response", (res) => {
@@ -56,15 +56,18 @@ export const getAnime3rb = async (id: number) => {
     waitUntil: "networkidle2",
     timeout: 60000,
   });
-  
+  const html = await page.content();
+  console.log(html.slice(0, 2000));
+  console.log(html.slice(-2000));
+
   const hasQuery = await page.evaluate(() => {
     return !!document.querySelector("#query");
   });
-  
+
   if (!hasQuery) {
     throw new Error("Search input #query not found (blocked or not loaded)");
   }
-  
+
   await page.waitForSelector("#query", { visible: true });
 
   await page.click("#query");
@@ -209,8 +212,8 @@ export const getEpisodeStreams = async (
 
     page.on("response", async (response) => {
       const url = response.url();
-      console.log(url)
-      if (!done && /\.mp4\?.*noip=yes$/.test(url) ) {
+      console.log(url);
+      if (!done && /\.mp4\?.*noip=yes$/.test(url)) {
         done = true;
         console.log("Found video URL:", url);
         await cleanup();
