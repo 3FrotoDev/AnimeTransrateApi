@@ -40,6 +40,7 @@ app.get("/", (req, res) => {
       "/api/anilist-to-hianimez",
       "/api/subdl",
       "/api/external",
+      "/api/anime3rb",
       "/api/extractor"
     ] 
   });
