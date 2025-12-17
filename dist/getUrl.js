@@ -47,7 +47,7 @@ async function getDirectVideoUrl(embedUrl) {
         const $ = (0, cheerio_1.load)(data);
         const mp4 = $("source").attr("src");
         if (mp4)
-            return mp4;
+            return { mp4, client_side: true };
         const scripts = $("script").toArray();
         for (const script of scripts) {
             const content = $(script).html();
@@ -57,7 +57,7 @@ async function getDirectVideoUrl(embedUrl) {
             if (match)
                 return match[0];
         }
-        return null;
+        return { mp4: null, client_side: true };
     }
     catch (err) {
         console.log("getDirectVideoUrl error:", err.message);

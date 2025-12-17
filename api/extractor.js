@@ -16,11 +16,12 @@ module.exports = async (req, res) => {
 
     console.log(videoUrl)
     const a = await getVideoUrl(videoUrl)
-    if(!a){
-      return res.status(500).json({ a })
+    console.log(a)
+    if(!a && !a.mp4){
+      return res.status(500).json({ error: "Failed to extract video url", message: "No video url found" })
     }
-    return res.status(200).json({ a })
+    return res.status(200).json({ a: a?.mp4 ? a.mp4 : a, client_side: a.client_side })
   } catch (error) {
-    return res.status(500).json({ error: "Failed", message: error.message });
+    return res.status(500).json({ error: "Failed", message: error.message ? error.message : "Unknown error" });
   }
 };

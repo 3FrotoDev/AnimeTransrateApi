@@ -44,6 +44,21 @@ app.get("/", (req, res) => {
   });
 });
 
+const puppeteer = require("puppeteer");
+
+// async function test() {
+//   const browser = await puppeteer.launch({ headless: false });
+//   const page = await browser.newPage();
+//   await page.goto("https://anime3rb.com/search?q=a", { waitUntil: "networkidle2" });
+//   const videoLinks = await page.evaluate(() => {
+//     return Array.from(document.querySelectorAll("video source")).map(v => v.src);
+//   });
+//   console.log(videoLinks);
+//   await browser.close();  
+// }
+
+// test();
+
 app.use("/api/translate", translateHandler);
 app.use("/api/serve", serveHandler);
 app.use("/api/download", downloadHandler);
