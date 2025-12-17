@@ -10,6 +10,7 @@ const anilistToHiAnimeHandler = require("./api/anilist-to-hianimez");
 const subdlHandler = require("./api/subdl");
 const externalHandler = require("./api/external")
 const extractorHandler = require("./api/extractor")
+const anime3rbHandler = require("./api/anime3rb")
 const app = express();
 
 const limiter = rateLimit({
@@ -66,6 +67,7 @@ app.use("/api/anilist-to-hianimez", anilistToHiAnimeHandler);
 app.use("/api/subdl", subdlHandler);
 app.use("/api/external", externalHandler)
 app.use("/api/extractor", extractorHandler)
+app.use("/api/anime3rb", anime3rbHandler)
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
 
