@@ -6,6 +6,7 @@ import axios from "axios";
 import { load } from "cheerio";
 import { addExtra } from "puppeteer-extra";
 import StealthPlugin from "puppeteer-extra-plugin-stealth";
+import { connect } from "puppeteer-real-browser";
 
 export function animeSlug(name: string): string {
   return name
@@ -44,57 +45,36 @@ const getRandomProxy = () => {
 
 export const getAnime3rb = async (id: number) => {
   const title = await getAnilistTitle(id);
+
   if (!title?.romaji) throw new Error("No title");
 
   const proxyData = getRandomProxy();
   console.log(`Using Proxy: ${proxyData.server}`);
+  
+  const { browser, page } = await connect({
+    headless: false,
 
-  let browser;
-  let executablePath;
+    args: [],
 
-  if (process.env.IS_LOCAL !== "true") {
-    // بيئة الإنتاج (Vercel)
-    executablePath = await chromium.executablePath();
-    
-    browser = await puppeteerExtra.launch({
-      args: [
-        ...chromium.args,
-        "--hide-scrollbars",
-        "--disable-web-security",
-        `--proxy-server=${proxyData.server}`, // إضافة البروكسي هنا
-      ],
-      defaultViewport: chromium.defaultViewport,
-      executablePath: executablePath,
-      headless: chromium.headless,
-      ignoreHTTPSErrors: true,
-    });
-  } else {
-    // بيئة اللوكال (جهازك)
-    // هنا نستخدم puppeteer-extra العادي المغلف للـ puppeteer الكامل
-    const { addExtra } = require("puppeteer-extra");
-    const puppeteerLocal = addExtra(require("puppeteer"));
-    puppeteerLocal.use(StealthPlugin());
+    customConfig: {},
 
-    browser = await puppeteerLocal.launch({
-      headless: false, // اجعله false لترى ماذا يحدث أثناء التجربة
-      args: [
-        "--no-sandbox", 
-        "--disable-setuid-sandbox",
-        `--proxy-server=${proxyData.server}`
-      ],
-    });
-  }
+    turnstile: true,
+
+    connectOption: {},
+
+    disableXvfb: false,
+    ignoreAllFlags: false,
+    // proxy:{
+    //     host:'<proxy-host>',
+    //     port:'<proxy-port>',
+    //     username:'<proxy-username>',
+    //     password:'<proxy-password>'
+    // }
+  });
 
   try {
     const page = await browser.newPage();
 
-    // المصادقة مع البروكسي (Auth)
-    await page.authenticate({
-      username: proxyData.username,
-      password: proxyData.password,
-    });
-
-    // إعدادات إضافية للتخفي
     await page.setExtraHTTPHeaders({
       "accept-language": "en-US,en;q=0.9,ar;q=0.8",
       "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",

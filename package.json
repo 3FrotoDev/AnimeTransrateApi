@@ -33,6 +33,7 @@
     "puppeteer-core": "^10.4.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "puppeteer-real-browser": "^1.4.4",
     "typescript": "^5.9.3",
     "uuid": "^12.0.0"
   }
