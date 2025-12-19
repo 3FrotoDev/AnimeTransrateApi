@@ -246,7 +246,8 @@ async function getEpisodeStream(url) {
     await browser.close();
     return servers.length > 0 ? servers : [];
 }
-async function getEpisodeVideaStream(url) {
+async function getEpisodeVideaStream(url1) {
+    const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`;
     const blockedAds = [
         "doubleclick.net",
         "googlesyndication.com",
