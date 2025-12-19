@@ -344,6 +344,7 @@ export async function getEpisodeVideaStream(url1: string) {
   page.on("request", async (req) => {
     const u = req.url();
 
+    console.log(u)
     if (blockedAds.some((d) => u.includes(d))) {
       return req.abort();
     }
