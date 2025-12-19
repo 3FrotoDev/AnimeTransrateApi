@@ -16,8 +16,18 @@ module.exports = async (req, res) => {
         .json({ error: "AnilistID and ep parameters are required" });
     }
 
-    const a = await axios.get("https://witanime.day/anime/rezero-kara-hajimeru-isekai-seikatsu-2nd-season-part-2/");
-
+    const a = await axios.get(url, {
+      headers: {
+        "User-Agent":
+          "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept":
+          "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language": "ar,en-US;q=0.9,en;q=0.8",
+        "Referer": "https://witanime.day/",
+        "Connection": "keep-alive",
+      },
+    });
+    
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(a.data);
 
