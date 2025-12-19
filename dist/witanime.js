@@ -88,7 +88,9 @@ async function getWinAnime(id) {
     }
     const encodedTitle = encodeURIComponent(title.romaji);
     const url = `https://witanime.day/?search_param=animes&s=${encodedTitle}`;
-    const html = await axios_1.default.get(url);
+    const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`;
+    const html = await axios_1.default.get(scrapeUrl);
+    console.log(JSON.stringify(html.data));
     const $ = cheerio.load(html.data);
     const results = [];
     $(".anime-card-container").each((_, el) => {
@@ -162,7 +164,8 @@ function parseEpisodesFromScript(html, page = 1, perPage = 50) {
     };
 }
 async function getEpisodesByNumbers(url, numbers) {
-    const res = await axios_1.default.get(url);
+    const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`;
+    const res = await axios_1.default.get(scrapeUrl);
     const html = res.data;
     const $ = cheerio.load(html);
     let encoded = "";

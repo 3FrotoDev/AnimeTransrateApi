@@ -57,8 +57,11 @@ export async function getWinAnime(id: number) {
   const encodedTitle = encodeURIComponent(title.romaji);
 
   const url = `https://witanime.day/?search_param=animes&s=${encodedTitle}`;
+  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`
 
-  const html = await axios.get(url);
+  const html = await axios.get(scrapeUrl);
+  console.log(JSON.stringify(html.data));
+
   const $ = cheerio.load(html.data);
 
   type AnimeCard = {
@@ -181,7 +184,8 @@ export function parseEpisodesFromScript(
 }
 
 export async function getEpisodesByNumbers(url: string, numbers: number[]) {
-  const res = await axios.get(url);
+  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`
+  const res = await axios.get(scrapeUrl);
   const html = res.data;
   const $ = cheerio.load(html);
 

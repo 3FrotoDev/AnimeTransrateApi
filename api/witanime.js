@@ -1,8 +1,5 @@
-const { default: axios } = require("axios");
 const { getEpisodeStreaming } = require("../dist/main");
 const { getWinAnime, getEpisodesByNumbers, getEpisodeVideaStream } = require("../dist/witanime")
-var cloudscraper = require('cloudscraper');
-
 module.exports = async (req, res) => {
   if (req.method !== "GET") {
     return res.status(405).json({ error: "Method not allowed" });
@@ -18,12 +15,25 @@ module.exports = async (req, res) => {
         .json({ error: "AnilistID and ep parameters are required" });
     }
 
- 
-    const a = cloudscraper.get('https://witanime.day/').then(console.log, console.error);
+    const witanime = await getWinAnime(143338);
+    if(!witanime){
+        return res.status(500).json({ error: "Failed to find this anime", message: error.message });
+    }
+    console.log("WinAnime", witanime);
 
-    res.setHeader("Content-Type", "text/html; charset=utf-8");
-    return res.status(200).send(a);
+    const episodes = await getEpisodesByNumbers(witanime.url, [Number(ep)]);
+    if(episodes.length <= 0){
+        return res.status(500).json({ error: "Failed to find this ep", message: animeEpisode.message });
+    }
+    console.log("Episodes array", episodes);
+    const episode = episodes[0];
+    console.log("Full One Episode", episode);
 
+    const episode_streams = await getEpisodeVideaStream(episode.url);
+    console.log(episode_streams)
+    return res
+    .status(200)
+    .json({ episode_streams });
   } catch (error) {
     console.log(error)
     return res.status(500).json({ error: "Failed", message: error.message ? error.message : "Something went wrong"});
