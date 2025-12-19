@@ -1,3 +1,4 @@
+const { default: axios } = require("axios");
 const { getEpisodeStreaming } = require("../dist/main");
 const { getWinAnime, getEpisodesByNumbers, getEpisodeVideaStream } = require("../dist/witanime")
 module.exports = async (req, res) => {
@@ -15,12 +16,11 @@ module.exports = async (req, res) => {
         .json({ error: "AnilistID and ep parameters are required" });
     }
 
+    const a = await axios.get(url);
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    return res.status(200).send(a.data);
     
-    const episode_streams = await getEpisodeVideaStream("https://witanime.day/episode/otonari-no-tenshi-sama-ni-itsunomanika-dame-ningen-ni-sareteita-ken-%d8%a7%d9%84%d8%ad%d9%84%d9%82%d8%a9-1/");
-    console.log(episode_streams)
-    return res
-    .status(200)
-    .json({ episode_streams });
   } catch (error) {
     console.log(error)
     return res.status(500).json({ error: "Failed", message: error.message ? error.message : "Something went wrong"});
