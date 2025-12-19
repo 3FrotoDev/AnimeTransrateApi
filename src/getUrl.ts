@@ -77,11 +77,14 @@ export async function getMp4(embedUrl: string) {
       browser = await puppeteerCore.launch({
         executablePath,
         args: chromium.args,
+        //@ts-ignore
         headless: chromium.headless,
+        //@ts-ignore
         defaultViewport: chromium.defaultViewport,
       });
     } else {
       browser = await puppeteer.launch({
+        //@ts-ignore
         headless: "new",
         args: ["--no-sandbox", "--disable-setuid-sandbox"],
       });

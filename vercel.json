@@ -9,6 +9,18 @@
       "maxDuration": 300,
       "memory": 1024
     },
+    "api/mega.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "api/drive.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
+    "api/witanime.js": {
+      "maxDuration": 300,
+      "memory": 1024
+    },
     "api/anime3rb.js": {
       "maxDuration": 300,
       "memory": 1024
@@ -36,6 +48,9 @@
     { "src": "/api/external(?:/.*)?", "dest": "/api/external.js" },
     { "src": "/api/extractor(?:/.*)?", "dest": "/api/extractor.js" },
     { "src": "/api/anime3rb(?:/.*)?", "dest": "/api/anime3rb.js" },
+    { "src": "/api/drive(?:/.*)?", "dest": "/api/drive.js" },
+    { "src": "/api/mega(?:/.*)?", "dest": "/api/mega.js" },
+    { "src": "/api/witanime(?:/.*)?", "dest": "/api/witanime.js" },
     { "src": "/api/download(?:/.*)?", "dest": "/api/download.js" },
     { "src": "/api/anilist-to-hianimez(?:/.*)?", "dest": "/api/anilist-to-hianimez.js" }
   ]

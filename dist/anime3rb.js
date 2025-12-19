@@ -49,6 +49,8 @@ const getAnime3rb = async (id) => {
     const title = await (0, mapping_1.getAnilistTitle)(id);
     if (!title?.romaji)
         throw new Error("No title");
+    const proxyData = getRandomProxy();
+    console.log(`Using Proxy: ${proxyData.server}`);
     const { browser, page } = await (0, puppeteer_real_browser_1.connect)({
         headless: false,
         args: [],
@@ -66,7 +68,6 @@ const getAnime3rb = async (id) => {
     });
     try {
         const page = await browser.newPage();
-        // إعدادات إضافية للتخفي
         await page.setExtraHTTPHeaders({
             "accept-language": "en-US,en;q=0.9,ar;q=0.8",
             "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8",
