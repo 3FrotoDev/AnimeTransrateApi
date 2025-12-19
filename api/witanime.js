@@ -16,11 +16,11 @@ module.exports = async (req, res) => {
         .json({ error: "AnilistID and ep parameters are required" });
     }
 
-    const a = await axios.get(url);
+    const a = await axios.get("https://witanime.day/anime/rezero-kara-hajimeru-isekai-seikatsu-2nd-season-part-2/");
 
     res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(a.data);
-    
+
   } catch (error) {
     console.log(error)
     return res.status(500).json({ error: "Failed", message: error.message ? error.message : "Something went wrong"});
