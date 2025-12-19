@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
         .json({ error: "AnilistID and ep parameters are required" });
     }
 
-    const a = await axios.get(url, {
+    const a = await axios.get("https://witanime.day/anime/rezero-kara-hajimeru-isekai-seikatsu-2nd-season-part-2/", {
       headers: {
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
