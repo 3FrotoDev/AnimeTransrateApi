@@ -35,6 +35,7 @@ module.exports = async (req, res) => {
     .status(200)
     .json({ episode_streams });
   } catch (error) {
+    console.log(error)
     return res.status(500).json({ error: "Failed", message: error.message ? error.message : "Something went wrong"});
   }
 };
