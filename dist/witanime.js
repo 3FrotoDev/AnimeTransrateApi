@@ -259,6 +259,9 @@ async function getEpisodeVideaStream(url1) {
     const finalPromise = new Promise((resolve) => {
         resolveFinal = resolve;
     });
+    // const browser = await puppeteer.connect({
+    //   browserWSEndpoint: `wss://production-sfo.browserless.io?token=2Td0zZKt4jEz0Ol32a7a66e5ad6af56fbf390263cb8af3f5a`,
+    // });
     let browser;
     if (process.env.IS_LOCAL !== "true") {
         const executablePath = await chromium_1.default.executablePath();
@@ -275,11 +278,6 @@ async function getEpisodeVideaStream(url1) {
             args: ["--no-sandbox", "--disable-setuid-sandbox"],
         });
     }
-    // const browser = await puppeteer.launch({
-    //   headless: false, // مهم: لتشوف المتصفح يفتح على الشاشة
-    //   defaultViewport: null, // خلي حجم النافذة كامل
-    //   args: ["--start-maximized"], // فتح المتصفح كبير
-    // });
     const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on("request", async (req) => {
@@ -304,37 +302,20 @@ async function getEpisodeVideaStream(url1) {
     const videa = await page.$$(".server-link"); // NodeList
     let btn = null;
     for (const el of videa) {
-        const text = await el.evaluate((el) => el.textContent?.toLowerCase().trim());
+        const text = await el.evaluate(el => el.textContent?.toLowerCase().trim());
         if (text && text.includes("videa")) {
             btn = el;
-            break;
+            break; // أول زر يحتوي على كلمة "videa"
         }
     }
     if (btn) {
-        const box = await btn.boundingBox();
-        if (box) {
-            try {
-                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-                await page.mouse.down();
-                await page.mouse.up();
-                console.log("Clicked Videa server button using mouse events");
-            }
-            catch (error) {
-                console.log(error);
-            }
-        }
-        else {
-            console.log("Could not determine button position");
-        }
+        await btn.click();
+        console.log("Clicked Videa server button");
     }
     else {
         console.log("Videa button not found");
     }
     const html = await page.content();
-    const screenshot = await page.screenshot();
-    const filePath = path_1.default.join(process.cwd(), "screenshot.png");
-    // احفظ الصورة
-    fs_1.default.writeFileSync(filePath, screenshot);
     fs_1.default.writeFileSync(path_1.default.join(process.cwd(), "iframe_snapshot.html"), html, "utf-8");
     // 🛑 fallback timeout
     const result = await Promise.race([

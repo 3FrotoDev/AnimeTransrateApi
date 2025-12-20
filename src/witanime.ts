@@ -57,7 +57,7 @@ export async function getWinAnime(id: number) {
   const encodedTitle = encodeURIComponent(title.romaji);
 
   const url = `https://witanime.day/?search_param=animes&s=${encodedTitle}`;
-  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`;
+  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`
 
   const html = await axios.get(scrapeUrl);
   console.log(JSON.stringify(html.data));
@@ -184,7 +184,7 @@ export function parseEpisodesFromScript(
 }
 
 export async function getEpisodesByNumbers(url: string, numbers: number[]) {
-  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`;
+  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`
   const res = await axios.get(scrapeUrl);
   const html = res.data;
   const $ = cheerio.load(html);
@@ -225,6 +225,7 @@ export async function getEpisodeStream(url: string) {
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
   }
+
 
   const page = await browser.newPage();
 
@@ -297,7 +298,8 @@ export async function getEpisodeStream(url: string) {
 }
 
 export async function getEpisodeVideaStream(url1: string) {
-  const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`;
+
+  const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`
   const blockedAds = [
     "doubleclick.net",
     "googlesyndication.com",
@@ -315,6 +317,10 @@ export async function getEpisodeVideaStream(url1: string) {
     }
   );
 
+  // const browser = await puppeteer.connect({
+  //   browserWSEndpoint: `wss://production-sfo.browserless.io?token=2Td0zZKt4jEz0Ol32a7a66e5ad6af56fbf390263cb8af3f5a`,
+  // });
+
   let browser;
   if (process.env.IS_LOCAL !== "true") {
     const executablePath = await chromium.executablePath();
@@ -331,13 +337,6 @@ export async function getEpisodeVideaStream(url1: string) {
     });
   }
 
-
-  // const browser = await puppeteer.launch({
-  //   headless: false, // مهم: لتشوف المتصفح يفتح على الشاشة
-  //   defaultViewport: null, // خلي حجم النافذة كامل
-  //   args: ["--start-maximized"], // فتح المتصفح كبير
-  // });
-
   const page = await browser.newPage();
 
   await page.setRequestInterception(true);
@@ -345,7 +344,7 @@ export async function getEpisodeVideaStream(url1: string) {
   page.on("request", async (req) => {
     const u = req.url();
 
-    console.log(u);
+    console.log(u)
     if (blockedAds.some((d) => u.includes(d))) {
       return req.abort();
     }
@@ -369,52 +368,35 @@ export async function getEpisodeVideaStream(url1: string) {
 
   await page.goto(url, { waitUntil: "domcontentloaded" });
 
-  await page.waitForSelector(".server-link");
+await page.waitForSelector(".server-link");
 
-  const videa = await page.$$(".server-link"); // NodeList
-  let btn: any = null;
+const videa = await page.$$(".server-link"); // NodeList
+let btn: any = null;
 
-  for (const el of videa) {
-    const text = await el.evaluate((el) =>
-      el.textContent?.toLowerCase().trim()
-    );
-    if (text && text.includes("videa")) {
-      btn = el;
-      break;
-    }
+for (const el of videa) {
+  const text = await el.evaluate(el => el.textContent?.toLowerCase().trim());
+  if (text && text.includes("videa")) {
+    btn = el;
+    break; // أول زر يحتوي على كلمة "videa"
   }
+}
 
-  if (btn) {
-    const box = await btn.boundingBox();
-    if (box) {
-     try {
-      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
-      await page.mouse.down();
-      await page.mouse.up();
+if (btn) {
+  await btn.click();
+  console.log("Clicked Videa server button");
+} else {
+  console.log("Videa button not found");
+}
 
-      console.log("Clicked Videa server button using mouse events");
-     } catch (error) {
-      console.log(error)
-     }
-    } else {
-      console.log("Could not determine button position");
-    }
-  } else {
-    console.log("Videa button not found");
-  }
+const html = await page.content()
 
-  const html = await page.content();
-  const screenshot = await page.screenshot();
+  
+fs.writeFileSync(
+  path.join(process.cwd(), "iframe_snapshot.html"),
+  html,
+  "utf-8"
+);
 
-  const filePath = path.join(process.cwd(), "screenshot.png");
-
-  // احفظ الصورة
-  fs.writeFileSync(filePath, screenshot);
-  fs.writeFileSync(
-    path.join(process.cwd(), "iframe_snapshot.html"),
-    html,
-    "utf-8"
-  );
 
   // 🛑 fallback timeout
   const result = await Promise.race([
