@@ -350,6 +350,7 @@ export async function getEpisodeVideaStream(url1: string) {
     customConfig: {
       chromePath: execPath,
     },
+    disableXvfb: false,
     turnstile: true,
   });
 

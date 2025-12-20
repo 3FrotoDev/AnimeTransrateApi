@@ -283,13 +283,13 @@ async function getEpisodeVideaStream(url1) {
     const finalPromise = new Promise((resolve) => {
         resolveFinal = resolve;
     });
-    const execPath = await getChromiumPath();
     const { browser, page } = await (0, puppeteer_real_browser_1.connect)({
         headless: true,
         args: [],
-        customConfig: {
-            chromePath: execPath,
+        connectOption: {
+            browserWSEndpoint: "wss://production-sfo.browserless.io?token=2Td0zZKt4jEz0Ol32a7a66e5ad6af56fbf390263cb8af3f5a",
         },
+        disableXvfb: true,
         turnstile: true,
     });
     await page.setRequestInterception(true);
