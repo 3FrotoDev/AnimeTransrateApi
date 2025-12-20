@@ -274,15 +274,16 @@ async function getEpisodeVideaStream(url1) {
     else {
         browser = await puppeteer_1.default.launch({
             //@ts-ignore
-            headless: "new",
+            headless: false,
             args: ["--no-sandbox", "--disable-setuid-sandbox"],
         });
     }
     const page = await browser.newPage();
     await page.setRequestInterception(true);
+
+
     page.on("request", async (req) => {
         const u = req.url();
-        console.log(u);
         if (blockedAds.some((d) => u.includes(d))) {
             return req.abort();
         }
@@ -299,15 +300,19 @@ async function getEpisodeVideaStream(url1) {
     });
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".server-link");
-    await page.evaluate(() => {
+
+    await page.evaluate(async () => {
         const videa = Array.from(
         //@ts-ignore
         document.querySelectorAll(".server-link")
         //@ts-ignore
         ).find((el) => el.textContent?.toLowerCase().includes("videa"));
-        console.log(videa);
         //@ts-ignore
-        videa?.click();
+       try{
+        videa?.click()
+       } catch (e){
+        console.log(e)
+       }
     });
     // 🛑 fallback timeout
     const result = await Promise.race([
