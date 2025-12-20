@@ -282,6 +282,7 @@ async function getEpisodeVideaStream(url1) {
     await page.setRequestInterception(true);
     page.on("request", async (req) => {
         const u = req.url();
+        console.log(u);
         if (blockedAds.some((d) => u.includes(d))) {
             return req.abort();
         }
