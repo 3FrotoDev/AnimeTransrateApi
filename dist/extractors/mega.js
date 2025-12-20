@@ -1,37 +1,39 @@
-const { File } = require("megajs");
-
-class MegaNZExtractor {
-  constructor() {
-    this.serverName = "Mega.nz";
-  }
-
-  async extract(videoUrl) {
-    try {
-      // megajs يقبل embed و file links
-      const file = File.fromURL(videoUrl.toString());
-
-      // تحميل الميتاداتا (name, size, key, ...)
-      await file.loadAttributes();
-
-      // رابط ستريم مباشر (ReadableStream)
-      const stream = await file.download();
-
-      return {
-        provider: "mega.nz",
-        name: file.name,
-        size: file.size,
-        mime: file.type ?? "video/mp4",
-
-        // مهم: ده Stream مش URL
-        stream,
-
-        // لو محتاج URL مؤقت (مش دايمًا متاح)
-        downloadable: true,
-      };
-    } catch (err) {
-      throw new Error("Mega.nz extraction failed: " + err.message);
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const models_1 = require("../models");
+class MegaCloud extends models_1.VideoExtractor {
+    constructor() {
+        super(...arguments);
+        this.serverName = 'MegaCloud';
+        this.sources = [];
+        this.extract = async (videoUrl) => {
+            try {
+                const apiUrl = 'https://crawlr.cc/9D7F1B3E8?url=' + encodeURIComponent(videoUrl.href);
+                const { data } = await this.client.get(apiUrl);
+                if (!data.sources || data.sources.length === 0) {
+                    throw new Error('No sources returned');
+                }
+                for (const src of data.sources) {
+                    this.sources.push({
+                        url: src.url,
+                        quality: src.quality ?? 'auto',
+                        isM3U8: src.url.includes('.m3u8'),
+                    });
+                }
+                const subtitles = data.tracks?.map(t => ({
+                    lang: t.label ?? 'Unknown',
+                    url: t.file,
+                    kind: t.kind ?? 'captions',
+                })) ?? [];
+                return {
+                    sources: this.sources,
+                    subtitles,
+                };
+            }
+            catch (err) {
+                throw new Error(err.message);
+            }
+        };
     }
-  }
 }
-
-module.exports = MegaNZExtractor;
+exports.default = MegaCloud;

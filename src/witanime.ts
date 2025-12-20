@@ -5,7 +5,8 @@ import * as cheerio from "cheerio";
 import axios from "axios";
 import { FindBestMatchByTitles } from "./frequency";
 import puppeteerCore from "puppeteer-core";
-import chromium from "@sparticuz/chromium";
+import { connect } from "puppeteer-real-browser";
+import chromium from "@sparticuz/chromium-min";
 
 interface AniListTitle {
   romaji?: string;
@@ -57,7 +58,7 @@ export async function getWinAnime(id: number) {
   const encodedTitle = encodeURIComponent(title.romaji);
 
   const url = `https://witanime.day/?search_param=animes&s=${encodedTitle}`;
-  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`
+  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`;
 
   const html = await axios.get(scrapeUrl);
   console.log(JSON.stringify(html.data));
@@ -184,7 +185,7 @@ export function parseEpisodesFromScript(
 }
 
 export async function getEpisodesByNumbers(url: string, numbers: number[]) {
-  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`
+  const scrapeUrl = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url}`;
   const res = await axios.get(scrapeUrl);
   const html = res.data;
   const $ = cheerio.load(html);
@@ -225,7 +226,6 @@ export async function getEpisodeStream(url: string) {
       args: ["--no-sandbox", "--disable-setuid-sandbox"],
     });
   }
-
 
   const page = await browser.newPage();
 
@@ -298,8 +298,7 @@ export async function getEpisodeStream(url: string) {
 }
 
 export async function getEpisodeVideaStream(url1: string) {
-
-  const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`
+  const url = url1;
   const blockedAds = [
     "doubleclick.net",
     "googlesyndication.com",
@@ -317,34 +316,36 @@ export async function getEpisodeVideaStream(url1: string) {
     }
   );
 
-  let browser;
-  if (process.env.IS_LOCAL !== "true") {
-    const executablePath = await chromium.executablePath();
-    browser = await puppeteerCore.launch({
-      executablePath,
-      args: chromium.args,
-      //@ts-ignore
-      headless: chromium.headless,
-      //@ts-ignore
-      defaultViewport: chromium.defaultViewport,
-    });
-  } else {
-    browser = await puppeteer.launch({
-      //@ts-ignore
-      headless: "new",
-      args: ["--no-sandbox", "--disable-setuid-sandbox"],
-    });
-  }
+  const { browser, page } = await connect({
+    headless: true,
+
+    args: [],
 
 
-  const page = await browser.newPage();
+    customConfig: {
+      chromePath: await chromium.executablePath()
+    },
+
+    turnstile: true,
+
+    connectOption: {},
+
+    disableXvfb: false,
+    ignoreAllFlags: false,
+    // proxy:{
+    //     host:'<proxy-host>',
+    //     port:'<proxy-port>',
+    //     username:'<proxy-username>',
+    //     password:'<proxy-password>'
+    // }
+  });
 
   await page.setRequestInterception(true);
 
   page.on("request", async (req) => {
     const u = req.url();
 
-    console.log(u)
+    console.log(u);
     if (blockedAds.some((d) => u.includes(d))) {
       return req.abort();
     }
@@ -370,17 +371,34 @@ export async function getEpisodeVideaStream(url1: string) {
 
   await page.waitForSelector(".server-link");
 
-  await page.evaluate(() => {
-    const videa = Array.from(
-      //@ts-ignore
-      document.querySelectorAll<HTMLAnchorElement>(".server-link")
-      //@ts-ignore
-    ).find((el) => el.textContent?.toLowerCase().includes("videa"));
+  const videa = await page.$$(".server-link"); // NodeList
+  let btn = null;
 
-    console.log(videa)
-    //@ts-ignore
-    videa?.click();
-  });
+  for (const el of videa) {
+    const text = await el.evaluate(el =>
+      el.textContent?.toLowerCase().trim()
+    );
+  
+    if (text && text.includes("videa")) {
+      btn = el;
+      break;
+    }
+  }
+  
+  if (btn) {
+    await btn.click();
+    console.log("Clicked Videa server button");
+  } else {
+    console.log("Videa button not found");
+  }
+
+  const html = await page.content();
+
+  fs.writeFileSync(
+    path.join(process.cwd(), "iframe_snapshot.html"),
+    html,
+    "utf-8"
+  );
 
   // 🛑 fallback timeout
   const result = await Promise.race([

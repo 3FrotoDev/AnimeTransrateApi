@@ -49,7 +49,8 @@ const cheerio = __importStar(require("cheerio"));
 const axios_1 = __importDefault(require("axios"));
 const frequency_1 = require("./frequency");
 const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
-const chromium_1 = __importDefault(require("@sparticuz/chromium"));
+const puppeteer_real_browser_1 = require("puppeteer-real-browser");
+const chromium_min_1 = __importDefault(require("@sparticuz/chromium-min"));
 const ANILIST_GRAPHQL = `
 query($mediaId: Int) {
   Media(id: $mediaId) {
@@ -185,14 +186,14 @@ async function getEpisodesByNumbers(url, numbers) {
 async function getEpisodeStream(url) {
     let browser;
     if (process.env.IS_LOCAL !== "true") {
-        const executablePath = await chromium_1.default.executablePath();
+        const executablePath = await chromium_min_1.default.executablePath();
         browser = await puppeteer_core_1.default.launch({
             executablePath,
-            args: chromium_1.default.args,
+            args: chromium_min_1.default.args,
             //@ts-ignore
-            headless: chromium_1.default.headless,
+            headless: chromium_min_1.default.headless,
             //@ts-ignore
-            defaultViewport: chromium_1.default.defaultViewport,
+            defaultViewport: chromium_min_1.default.defaultViewport,
         });
     }
     else {
@@ -247,7 +248,7 @@ async function getEpisodeStream(url) {
     return servers.length > 0 ? servers : [];
 }
 async function getEpisodeVideaStream(url1) {
-    const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`;
+    const url = url1;
     const blockedAds = [
         "doubleclick.net",
         "googlesyndication.com",
@@ -259,31 +260,27 @@ async function getEpisodeVideaStream(url1) {
     const finalPromise = new Promise((resolve) => {
         resolveFinal = resolve;
     });
-    let browser;
-    if (process.env.IS_LOCAL !== "true") {
-        const executablePath = await chromium_1.default.executablePath();
-        browser = await puppeteer_core_1.default.launch({
-            executablePath,
-            args: chromium_1.default.args,
-            //@ts-ignore
-            headless: chromium_1.default.headless,
-            //@ts-ignore
-            defaultViewport: chromium_1.default.defaultViewport,
-        });
-    }
-    else {
-        browser = await puppeteer_1.default.launch({
-            //@ts-ignore
-            headless: false,
-            args: ["--no-sandbox", "--disable-setuid-sandbox"],
-        });
-    }
-    const page = await browser.newPage();
+    const { browser, page } = await (0, puppeteer_real_browser_1.connect)({
+        headless: true,
+        args: [],
+        customConfig: {
+            chromePath: await chromium_min_1.default.executablePath()
+        },
+        turnstile: true,
+        connectOption: {},
+        disableXvfb: false,
+        ignoreAllFlags: false,
+        // proxy:{
+        //     host:'<proxy-host>',
+        //     port:'<proxy-port>',
+        //     username:'<proxy-username>',
+        //     password:'<proxy-password>'
+        // }
+    });
     await page.setRequestInterception(true);
-
-
     page.on("request", async (req) => {
         const u = req.url();
+        console.log(u);
         if (blockedAds.some((d) => u.includes(d))) {
             return req.abort();
         }
@@ -300,20 +297,24 @@ async function getEpisodeVideaStream(url1) {
     });
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".server-link");
-
-    await page.evaluate(async () => {
-        const videa = Array.from(
-        //@ts-ignore
-        document.querySelectorAll(".server-link")
-        //@ts-ignore
-        ).find((el) => el.textContent?.toLowerCase().includes("videa"));
-        //@ts-ignore
-       try{
-        videa?.click()
-       } catch (e){
-        console.log(e)
-       }
-    });
+    const videa = await page.$$(".server-link"); // NodeList
+    let btn = null;
+    for (const el of videa) {
+        const text = await el.evaluate(el => el.textContent?.toLowerCase().trim());
+        if (text && text.includes("videa")) {
+            btn = el;
+            break;
+        }
+    }
+    if (btn) {
+        await btn.click();
+        console.log("Clicked Videa server button");
+    }
+    else {
+        console.log("Videa button not found");
+    }
+    const html = await page.content();
+    fs_1.default.writeFileSync(path_1.default.join(process.cwd(), "iframe_snapshot.html"), html, "utf-8");
     // 🛑 fallback timeout
     const result = await Promise.race([
         finalPromise,
