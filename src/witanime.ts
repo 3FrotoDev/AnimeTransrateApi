@@ -376,6 +376,8 @@ export async function getEpisodeVideaStream(url1: string) {
       document.querySelectorAll<HTMLAnchorElement>(".server-link")
       //@ts-ignore
     ).find((el) => el.textContent?.toLowerCase().includes("videa"));
+
+    console.log(videa)
     //@ts-ignore
     videa?.click();
   });
