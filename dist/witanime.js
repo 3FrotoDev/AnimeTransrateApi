@@ -49,8 +49,7 @@ const cheerio = __importStar(require("cheerio"));
 const axios_1 = __importDefault(require("axios"));
 const frequency_1 = require("./frequency");
 const puppeteer_core_1 = __importDefault(require("puppeteer-core"));
-const puppeteer_real_browser_1 = require("puppeteer-real-browser");
-const chromium_min_1 = __importDefault(require("@sparticuz/chromium-min"));
+const chromium_1 = __importDefault(require("@sparticuz/chromium"));
 const ANILIST_GRAPHQL = `
 query($mediaId: Int) {
   Media(id: $mediaId) {
@@ -186,14 +185,14 @@ async function getEpisodesByNumbers(url, numbers) {
 async function getEpisodeStream(url) {
     let browser;
     if (process.env.IS_LOCAL !== "true") {
-        const executablePath = await chromium_min_1.default.executablePath();
+        const executablePath = await chromium_1.default.executablePath();
         browser = await puppeteer_core_1.default.launch({
             executablePath,
-            args: chromium_min_1.default.args,
+            args: chromium_1.default.args,
             //@ts-ignore
-            headless: chromium_min_1.default.headless,
+            headless: chromium_1.default.headless,
             //@ts-ignore
-            defaultViewport: chromium_min_1.default.defaultViewport,
+            defaultViewport: chromium_1.default.defaultViewport,
         });
     }
     else {
@@ -247,31 +246,8 @@ async function getEpisodeStream(url) {
     await browser.close();
     return servers.length > 0 ? servers : [];
 }
-const CHROMIUM_PACK_URL = "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
-let cachedExecutablePath = null;
-let downloadPromise = null;
-async function getChromiumPath() {
-    if (cachedExecutablePath)
-        return cachedExecutablePath;
-    if (!downloadPromise) {
-        const chromium = (await Promise.resolve().then(() => __importStar(require("@sparticuz/chromium-min")))).default;
-        downloadPromise = chromium
-            .executablePath(CHROMIUM_PACK_URL)
-            .then((p) => {
-            cachedExecutablePath = p;
-            console.log("Chromium path resolved:", p);
-            return p;
-        })
-            .catch((err) => {
-            console.error("Failed to get Chromium path:", err);
-            downloadPromise = null;
-            throw err;
-        });
-    }
-    return downloadPromise;
-}
 async function getEpisodeVideaStream(url1) {
-    const url = url1;
+    const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`;
     const blockedAds = [
         "doubleclick.net",
         "googlesyndication.com",
@@ -283,34 +259,40 @@ async function getEpisodeVideaStream(url1) {
     const finalPromise = new Promise((resolve) => {
         resolveFinal = resolve;
     });
-    // Browserless configuration
-    // Use browserURL instead of browserWSEndpoint because puppeteer-real-browser
-    // uses browserURL internally and will override it with connectOption
-    const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || "2Td0zZKt4jEz0Ol32a7a66e5ad6af56fbf390263cb8af3f5a";
-    const BROWSERLESS_URL = process.env.BROWSERLESS_URL || "production-sfo.browserless.io";
-    const useBrowserless = process.env.USE_BROWSERLESS === "true";
-    const { browser, page } = await (0, puppeteer_real_browser_1.connect)({
-        headless: true,
-        turnstile: true,
-        disableXvfb: true,
-        connectOption: useBrowserless
-            ? {
-                // Use browserURL from Browserless (HTTP endpoint)
-                // Browserless supports browserURL via HTTP: http://host/chrome?token=TOKEN
-                // This will override the default browserURL from chrome-launcher
-                browserURL: `http://${BROWSERLESS_URL}/chrome?token=${BROWSERLESS_TOKEN}`,
-            }
-            : {},
-    });
+    let browser;
+    if (process.env.IS_LOCAL !== "true") {
+        const executablePath = await chromium_1.default.executablePath();
+        browser = await puppeteer_core_1.default.launch({
+            executablePath,
+            args: chromium_1.default.args,
+            headless: chromium_1.default.headless,
+            defaultViewport: chromium_1.default.defaultViewport,
+        });
+    }
+    else {
+        browser = await puppeteer_1.default.launch({
+            headless: "new",
+            args: ["--no-sandbox", "--disable-setuid-sandbox"],
+        });
+    }
+    // const browser = await puppeteer.launch({
+    //   headless: false, // مهم: لتشوف المتصفح يفتح على الشاشة
+    //   defaultViewport: null, // خلي حجم النافذة كامل
+    //   args: ["--start-maximized"], // فتح المتصفح كبير
+    // });
+    const page = await browser.newPage();
     await page.setRequestInterception(true);
     page.on("request", async (req) => {
         const u = req.url();
+        console.log(u);
         if (blockedAds.some((d) => u.includes(d))) {
             return req.abort();
         }
+        // 🎯 DIRECT VIDEA VIDEO
         if (!finished && /videa\.hu\/static\/[a-z]*\d+p\//i.test(u)) {
             finished = true;
             const timeMs = Math.round(performance.now() - startTime);
+            console.log(timeMs, "ms");
             resolveFinal({ url: u, timeMs });
             await browser.close();
             return;
@@ -319,7 +301,7 @@ async function getEpisodeVideaStream(url1) {
     });
     await page.goto(url, { waitUntil: "domcontentloaded" });
     await page.waitForSelector(".server-link");
-    const videa = await page.$$(".server-link");
+    const videa = await page.$$(".server-link"); // NodeList
     let btn = null;
     for (const el of videa) {
         const text = await el.evaluate((el) => el.textContent?.toLowerCase().trim());
@@ -328,16 +310,41 @@ async function getEpisodeVideaStream(url1) {
             break;
         }
     }
-    if (btn)
-        await btn.click();
+    if (btn) {
+        const box = await btn.boundingBox();
+        if (box) {
+            try {
+                await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+                await page.mouse.down();
+                await page.mouse.up();
+                console.log("Clicked Videa server button using mouse events");
+            }
+            catch (error) {
+                console.log(error);
+            }
+        }
+        else {
+            console.log("Could not determine button position");
+        }
+    }
+    else {
+        console.log("Videa button not found");
+    }
     const html = await page.content();
+    const screenshot = await page.screenshot();
+    const filePath = path_1.default.join(process.cwd(), "screenshot.png");
+    // احفظ الصورة
+    fs_1.default.writeFileSync(filePath, screenshot);
     fs_1.default.writeFileSync(path_1.default.join(process.cwd(), "iframe_snapshot.html"), html, "utf-8");
+    // 🛑 fallback timeout
     const result = await Promise.race([
         finalPromise,
         new Promise((res) => setTimeout(() => res(null), 10000)),
     ]);
-    if (!result)
+    if (!result) {
         await browser.close();
+        return null;
+    }
     return result;
 }
 // export async function idl(url: string) {

@@ -5,8 +5,7 @@ import * as cheerio from "cheerio";
 import axios from "axios";
 import { FindBestMatchByTitles } from "./frequency";
 import puppeteerCore from "puppeteer-core";
-import { connect } from "puppeteer-real-browser";
-import chromium from "@sparticuz/chromium-min";
+import chromium from "@sparticuz/chromium";
 
 interface AniListTitle {
   romaji?: string;
@@ -297,35 +296,8 @@ export async function getEpisodeStream(url: string) {
   return servers.length > 0 ? servers : [];
 }
 
-const CHROMIUM_PACK_URL = "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
-
-let cachedExecutablePath: string | null = null;
-let downloadPromise: Promise<string> | null = null;
-
-async function getChromiumPath(): Promise<string> {
-  if (cachedExecutablePath) return cachedExecutablePath;
-
-  if (!downloadPromise) {
-    const chromium = (await import("@sparticuz/chromium-min")).default;
-    downloadPromise = chromium
-      .executablePath(CHROMIUM_PACK_URL)
-      .then((p) => {
-        cachedExecutablePath = p;
-        console.log("Chromium path resolved:", p);
-        return p;
-      })
-      .catch((err) => {
-        console.error("Failed to get Chromium path:", err);
-        downloadPromise = null;
-        throw err;
-      });
-  }
-
-  return downloadPromise;
-}
-
 export async function getEpisodeVideaStream(url1: string) {
-  const url = url1;
+  const url = `https://api.scrape.do/?token=33721b3bd63c428e8beb5e358cd7791621a67d2ac45&url=${url1}`;
   const blockedAds = [
     "doubleclick.net",
     "googlesyndication.com",
@@ -333,6 +305,7 @@ export async function getEpisodeVideaStream(url1: string) {
   ];
 
   const startTime = performance.now();
+
   let resolveFinal!: (data: { url: string; timeMs: number }) => void;
   let finished = false;
 
@@ -342,41 +315,51 @@ export async function getEpisodeVideaStream(url1: string) {
     }
   );
 
-  // Browserless configuration
-  // Use browserURL instead of browserWSEndpoint because puppeteer-real-browser
-  // uses browserURL internally and will override it with connectOption
-  const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || "2Td0zZKt4jEz0Ol32a7a66e5ad6af56fbf390263cb8af3f5a";
-  const BROWSERLESS_URL = process.env.BROWSERLESS_URL || "production-sfo.browserless.io";
-  const useBrowserless = process.env.USE_BROWSERLESS === "true";
+  let browser;
+  if (process.env.IS_LOCAL !== "true") {
+    const executablePath = await chromium.executablePath();
+    browser = await puppeteerCore.launch({
+      executablePath,
+      args: chromium.args,
+      headless: chromium.headless,
+      defaultViewport: chromium.defaultViewport,
+    });
+  } else {
+    browser = await puppeteer.launch({
+      headless: "new",
+      args: ["--no-sandbox", "--disable-setuid-sandbox"],
+    });
+  }
 
-  const { browser, page } = await connect({
-    headless: true,
-    turnstile: true,
-    disableXvfb: true,
-    connectOption: useBrowserless
-      ? {
-          // Use browserURL from Browserless (HTTP endpoint)
-          // Browserless supports browserURL via HTTP: http://host/chrome?token=TOKEN
-          // This will override the default browserURL from chrome-launcher
-          browserURL: `http://${BROWSERLESS_URL}/chrome?token=${BROWSERLESS_TOKEN}`,
-        }
-      : {},
-  });
-  
+
+  // const browser = await puppeteer.launch({
+  //   headless: false, // مهم: لتشوف المتصفح يفتح على الشاشة
+  //   defaultViewport: null, // خلي حجم النافذة كامل
+  //   args: ["--start-maximized"], // فتح المتصفح كبير
+  // });
+
+  const page = await browser.newPage();
 
   await page.setRequestInterception(true);
 
   page.on("request", async (req) => {
     const u = req.url();
 
+    console.log(u);
     if (blockedAds.some((d) => u.includes(d))) {
       return req.abort();
     }
 
+    // 🎯 DIRECT VIDEA VIDEO
     if (!finished && /videa\.hu\/static\/[a-z]*\d+p\//i.test(u)) {
       finished = true;
+
       const timeMs = Math.round(performance.now() - startTime);
+
+      console.log(timeMs, "ms");
+
       resolveFinal({ url: u, timeMs });
+
       await browser.close();
       return;
     }
@@ -385,30 +368,65 @@ export async function getEpisodeVideaStream(url1: string) {
   });
 
   await page.goto(url, { waitUntil: "domcontentloaded" });
+
   await page.waitForSelector(".server-link");
 
-  const videa = await page.$$(".server-link");
-  let btn = null;
+  const videa = await page.$$(".server-link"); // NodeList
+  let btn: any = null;
 
   for (const el of videa) {
-    const text = await el.evaluate((el) => el.textContent?.toLowerCase().trim());
+    const text = await el.evaluate((el) =>
+      el.textContent?.toLowerCase().trim()
+    );
     if (text && text.includes("videa")) {
       btn = el;
       break;
     }
   }
 
-  if (btn) await btn.click();
+  if (btn) {
+    const box = await btn.boundingBox();
+    if (box) {
+     try {
+      await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+      await page.mouse.down();
+      await page.mouse.up();
+
+      console.log("Clicked Videa server button using mouse events");
+     } catch (error) {
+      console.log(error)
+     }
+    } else {
+      console.log("Could not determine button position");
+    }
+  } else {
+    console.log("Videa button not found");
+  }
 
   const html = await page.content();
-  fs.writeFileSync(path.join(process.cwd(), "iframe_snapshot.html"), html, "utf-8");
+  const screenshot = await page.screenshot();
 
+  const filePath = path.join(process.cwd(), "screenshot.png");
+
+  // احفظ الصورة
+  fs.writeFileSync(filePath, screenshot);
+  fs.writeFileSync(
+    path.join(process.cwd(), "iframe_snapshot.html"),
+    html,
+    "utf-8"
+  );
+
+  // 🛑 fallback timeout
   const result = await Promise.race([
     finalPromise,
     new Promise<null>((res) => setTimeout(() => res(null), 10000)),
   ]);
 
-  if (!result) await browser.close();
+  if (!result) {
+    await browser.close();
+    return null;
+  }
+
   return result;
 }
 
