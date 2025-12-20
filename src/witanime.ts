@@ -297,9 +297,7 @@ export async function getEpisodeStream(url: string) {
   return servers.length > 0 ? servers : [];
 }
 
-const CHROMIUM_PACK_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
-  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/chromium-pack.tar`
-  : "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
+const CHROMIUM_PACK_URL = "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
 
 let cachedExecutablePath: string | null = null;
 let downloadPromise: Promise<string> | null = null;
