@@ -283,15 +283,24 @@ async function getEpisodeVideaStream(url1) {
     const finalPromise = new Promise((resolve) => {
         resolveFinal = resolve;
     });
-    const execPath = await getChromiumPath();
+    // Browserless configuration
+    // Use browserURL instead of browserWSEndpoint because puppeteer-real-browser
+    // uses browserURL internally and will override it with connectOption
+    const BROWSERLESS_TOKEN = process.env.BROWSERLESS_TOKEN || "2Td0zZKt4jEz0Ol32a7a66e5ad6af56fbf390263cb8af3f5a";
+    const BROWSERLESS_URL = process.env.BROWSERLESS_URL || "production-sfo.browserless.io";
+    const useBrowserless = process.env.USE_BROWSERLESS === "true";
     const { browser, page } = await (0, puppeteer_real_browser_1.connect)({
         headless: true,
-        args: [],
-        customConfig: {
-            chromePath: execPath,
-        },
-        disableXvfb: false,
         turnstile: true,
+        disableXvfb: true,
+        connectOption: useBrowserless
+            ? {
+                // Use browserURL from Browserless (HTTP endpoint)
+                // Browserless supports browserURL via HTTP: http://host/chrome?token=TOKEN
+                // This will override the default browserURL from chrome-launcher
+                browserURL: `http://${BROWSERLESS_URL}/chrome?token=${BROWSERLESS_TOKEN}`,
+            }
+            : {},
     });
     await page.setRequestInterception(true);
     page.on("request", async (req) => {
