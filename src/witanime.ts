@@ -297,6 +297,35 @@ export async function getEpisodeStream(url: string) {
   return servers.length > 0 ? servers : [];
 }
 
+const CHROMIUM_PACK_URL = process.env.VERCEL_PROJECT_PRODUCTION_URL
+  ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}/chromium-pack.tar`
+  : "https://github.com/gabenunez/puppeteer-on-vercel/raw/refs/heads/main/example/chromium-dont-use-in-prod.tar";
+
+let cachedExecutablePath: string | null = null;
+let downloadPromise: Promise<string> | null = null;
+
+async function getChromiumPath(): Promise<string> {
+  if (cachedExecutablePath) return cachedExecutablePath;
+
+  if (!downloadPromise) {
+    const chromium = (await import("@sparticuz/chromium-min")).default;
+    downloadPromise = chromium
+      .executablePath(CHROMIUM_PACK_URL)
+      .then((p) => {
+        cachedExecutablePath = p;
+        console.log("Chromium path resolved:", p);
+        return p;
+      })
+      .catch((err) => {
+        console.error("Failed to get Chromium path:", err);
+        downloadPromise = null;
+        throw err;
+      });
+  }
+
+  return downloadPromise;
+}
+
 export async function getEpisodeVideaStream(url1: string) {
   const url = url1;
   const blockedAds = [
@@ -306,7 +335,6 @@ export async function getEpisodeVideaStream(url1: string) {
   ];
 
   const startTime = performance.now();
-
   let resolveFinal!: (data: { url: string; timeMs: number }) => void;
   let finished = false;
 
@@ -316,28 +344,15 @@ export async function getEpisodeVideaStream(url1: string) {
     }
   );
 
+  const execPath = await getChromiumPath();
+
   const { browser, page } = await connect({
     headless: true,
-
     args: [],
-
-
     customConfig: {
-      chromePath: await chromium.executablePath()
+      chromePath: execPath,
     },
-
     turnstile: true,
-
-    connectOption: {},
-
-    disableXvfb: false,
-    ignoreAllFlags: false,
-    // proxy:{
-    //     host:'<proxy-host>',
-    //     port:'<proxy-port>',
-    //     username:'<proxy-username>',
-    //     password:'<proxy-password>'
-    // }
   });
 
   await page.setRequestInterception(true);
@@ -345,21 +360,14 @@ export async function getEpisodeVideaStream(url1: string) {
   page.on("request", async (req) => {
     const u = req.url();
 
-    console.log(u);
     if (blockedAds.some((d) => u.includes(d))) {
       return req.abort();
     }
 
-    // 🎯 DIRECT VIDEA VIDEO
     if (!finished && /videa\.hu\/static\/[a-z]*\d+p\//i.test(u)) {
       finished = true;
-
       const timeMs = Math.round(performance.now() - startTime);
-
-      console.log(timeMs, "ms");
-
       resolveFinal({ url: u, timeMs });
-
       await browser.close();
       return;
     }
@@ -368,49 +376,30 @@ export async function getEpisodeVideaStream(url1: string) {
   });
 
   await page.goto(url, { waitUntil: "domcontentloaded" });
-
   await page.waitForSelector(".server-link");
 
-  const videa = await page.$$(".server-link"); // NodeList
+  const videa = await page.$$(".server-link");
   let btn = null;
 
   for (const el of videa) {
-    const text = await el.evaluate(el =>
-      el.textContent?.toLowerCase().trim()
-    );
-  
+    const text = await el.evaluate((el) => el.textContent?.toLowerCase().trim());
     if (text && text.includes("videa")) {
       btn = el;
       break;
     }
   }
-  
-  if (btn) {
-    await btn.click();
-    console.log("Clicked Videa server button");
-  } else {
-    console.log("Videa button not found");
-  }
+
+  if (btn) await btn.click();
 
   const html = await page.content();
+  fs.writeFileSync(path.join(process.cwd(), "iframe_snapshot.html"), html, "utf-8");
 
-  fs.writeFileSync(
-    path.join(process.cwd(), "iframe_snapshot.html"),
-    html,
-    "utf-8"
-  );
-
-  // 🛑 fallback timeout
   const result = await Promise.race([
     finalPromise,
     new Promise<null>((res) => setTimeout(() => res(null), 10000)),
   ]);
 
-  if (!result) {
-    await browser.close();
-    return null;
-  }
-
+  if (!result) await browser.close();
   return result;
 }
 
